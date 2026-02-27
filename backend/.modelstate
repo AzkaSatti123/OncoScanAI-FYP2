@@ -1,0 +1,13 @@
+{
+  "engines_loaded": [
+    "alexnet",
+    "best_seg",
+    "best_model"
+  ],
+  "timestamp": "2026-02-27T12:03:18.550078",
+  "model_files": [
+    "alexnet_backend.pth",
+    "best.pt",
+    "best_model.pth"
+  ]
+}
