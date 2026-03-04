@@ -1,0 +1,28 @@
+{
+  "models": {
+    "alexnet": {
+      "file": "alexnet_backend.pth",
+      "type": "custom_format",
+      "num_classes": 2,
+      "active": true,
+      "engine_key": "alexnet"
+    },
+    "best_model": {
+      "file": "best_model.pth",
+      "type": "efficientnet_b0",
+      "num_classes": 2,
+      "active": true,
+      "engine_key": "best_model"
+    },
+    "yolo": {
+      "file": "yolov11.pth",
+      "type": "ultralytics",
+      "active": false,
+      "engine_key": "yolo"
+    }
+  },
+  "last_loaded": "2026-02-27T12:03:18.545551",
+  "persistence": "enabled",
+  "active_count": 3,
+  "models_loaded": true
+}
