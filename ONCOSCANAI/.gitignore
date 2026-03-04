@@ -39,7 +39,7 @@ dist-ssr
 data/
 dataset/
 datasets/
-models/
+
 
 # CSV datasets
 *.csv
@@ -70,12 +70,6 @@ __pycache__/
 *.zip
 *.rar
 *.7z
-
-# Datasets
-data/
-dataset/
-datasets/
-models/
 
 # Logs
 *.log
