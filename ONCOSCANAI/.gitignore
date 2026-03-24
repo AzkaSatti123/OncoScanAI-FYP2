@@ -1,6 +1,10 @@
 # ==================================================
 # FRONTEND (Node / Vite / React)
 # ==================================================
+
+backend/venv*/
+backend/.pip-temp/
+
 node_modules/
 dist/
 dist-ssr/
@@ -69,4 +73,5 @@ datasets/
 # ERROR FILES
 # ==================================================
 *.err
-server.err
+server.errbackend/venv*/
+backend/.pip-temp/
