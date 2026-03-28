@@ -30,4 +30,7 @@ export interface UploadedFile {
     result: 'Benign' | 'Malignant' | 'Normal' | 'Inconclusive';
     confidence: number;
   };
+  suggestiveReport?: string;
+  reportStatus?: 'Idle' | 'Generating' | 'Complete' | 'Failed';
+  reportError?: string;
 }

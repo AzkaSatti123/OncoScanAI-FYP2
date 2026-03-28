@@ -1,8 +1,31 @@
 
 import React, { useEffect, useState } from 'react';
-import type { UploadedFile } from '../types';
+import type { AnalysisResult, UploadedFile } from '../types';
 import { UploadIcon, ModelIcon, LiveIcon, VisionIcon, InfoIcon } from '../components/icons';
 // --- Helper Functions ---
+
+type ModelsResponse = {
+  active_models?: string[];
+};
+
+type CombinedInferenceResponse = {
+  result?: string;
+  confidence?: number | string;
+  insight?: string;
+  engine?: string;
+  heatmap_url?: string;
+  mask?: string;
+  segmentation_mask?: string;
+  mask_pixel_count?: number | string;
+  mask_area_mm2?: number | string;
+  mask_type?: string;
+};
+
+type WorkerReportResponse = {
+  report?: string;
+};
+
+const REPORT_WORKER_URL = 'http://127.0.0.1:8787/report';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
@@ -45,6 +68,20 @@ const AnalysisStatCard: React.FC<{ title: string; value: string; }> = ({ title, 
     </div>
 );
 
+const normalizePathology = (value?: string): AnalysisResult['pathology'] => {
+  const normalized = (value || 'Inconclusive').trim().toLowerCase();
+  if (normalized === 'malignant') return 'Malignant';
+  if (normalized === 'benign') return 'Benign';
+  if (normalized === 'normal') return 'Normal';
+  return 'Inconclusive';
+};
+
+const normalizeReportText = (report?: string) =>
+  (report || '')
+    .replace(/\*\*/g, '')
+    .replace(/mmÂ²/g, 'mm^2')
+    .trim();
+
 // --- Main Component ---
 
 const UploadScans: React.FC = () => {
@@ -64,7 +101,7 @@ const UploadScans: React.FC = () => {
           const text = await res.text().catch(() => `Status ${res.status}`);
           throw new Error(text || `Backend error (${res.status})`);
         }
-        const json = await res.json();
+        const json = await res.json() as ModelsResponse;
         if (isMounted) {
           setBackendModels(Array.isArray(json.active_models) ? json.active_models : []);
           setBackendError(null);
@@ -87,6 +124,63 @@ const UploadScans: React.FC = () => {
     if (file.status === 'Complete' || file.status === 'Failed') setSelectedFile(file);
   };
 
+  const updateUploadedFile = (fileId: string, updater: (file: UploadedFile) => UploadedFile) => {
+    setFiles(cur => cur.map(file => (file.id === fileId ? updater(file) : file)));
+    setSelectedFile(prev => (prev && prev.id === fileId ? updater(prev) : prev));
+  };
+
+  const generateSuggestiveReport = async (fileObj: UploadedFile, analysis: AnalysisResult) => {
+    updateUploadedFile(fileObj.id, file => ({
+      ...file,
+      reportStatus: 'Generating',
+      reportError: undefined,
+    }));
+
+    try {
+      const res = await fetch(REPORT_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: fileObj.name,
+          analysis: {
+            pathology: analysis.pathology,
+            confidence: analysis.confidence,
+            insight: analysis.insight,
+            pixels: analysis.pixels,
+            area: analysis.area,
+            modelUsed: analysis.modelUsed,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => `Status ${res.status}`);
+        throw new Error(text || `Report generation failed (${res.status})`);
+      }
+
+      const json = await res.json() as WorkerReportResponse;
+      const report = normalizeReportText(json.report);
+
+      if (!report) {
+        throw new Error('Cloudflare Worker returned an empty report.');
+      }
+
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Complete',
+        suggestiveReport: report,
+        reportError: undefined,
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Failed',
+        reportError: msg,
+      }));
+    }
+  };
+
   const runBestModelInference = async (fileObj: UploadedFile, fileBlob: File) => {
     const form = new FormData();
     form.append('file', fileBlob);
@@ -105,11 +199,11 @@ const UploadScans: React.FC = () => {
         throw new Error(text || `Inference failed (${res.status})`);
       }
 
-      const json = await res.json();
+      const json = await res.json() as CombinedInferenceResponse;
 
       // Map backend response to AnalysisResult shape. Prefer backend-provided values.
-      const analysis = {
-        pathology: (json.result || 'Inconclusive').charAt(0).toUpperCase() + (json.result || 'Inconclusive').slice(1),
+      const analysis: AnalysisResult = {
+        pathology: normalizePathology(json.result),
         confidence: typeof json.confidence === 'number' ? json.confidence : Number(json.confidence) || 0,
         insight: json.insight || '',
         modelUsed: json.engine || 'BEST_MODEL',
@@ -120,10 +214,19 @@ const UploadScans: React.FC = () => {
         pixels: typeof json.mask_pixel_count === 'number' ? json.mask_pixel_count : (json.mask_pixel_count ? Number(json.mask_pixel_count) : undefined),
         area: typeof json.mask_area_mm2 === 'number' ? json.mask_area_mm2 : (json.mask_area_mm2 ? Number(json.mask_area_mm2) : undefined),
         maskType: json.mask_type || undefined
-      } as any;
+      };
 
-      setFiles(cur => cur.map(f => f.id === fileObj.id ? ({ ...f, status: 'Complete', analysis } as UploadedFile) : f));
-      setSelectedFile(prev => prev && prev.id === fileObj.id ? ({ ...fileObj, status: 'Complete', analysis } as UploadedFile) : ({ ...fileObj, status: 'Complete', analysis }));
+      const completedFile: UploadedFile = {
+        ...fileObj,
+        status: 'Complete',
+        analysis,
+        reportStatus: 'Generating',
+        reportError: undefined,
+      };
+
+      setFiles(cur => cur.map(f => f.id === fileObj.id ? completedFile : f));
+      setSelectedFile(prev => (!prev || prev.id === fileObj.id ? completedFile : prev));
+      void generateSuggestiveReport(completedFile, analysis);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setFiles(cur => cur.map(f => f.id === fileObj.id ? ({ ...f, status: 'Failed', errorMessage: msg } as UploadedFile) : f));
@@ -157,6 +260,7 @@ const UploadScans: React.FC = () => {
       status: 'Pending',
       type: (file.name.split('.').pop() as any) || 'png',
       previewUrl: URL.createObjectURL(file),
+      reportStatus: 'Idle',
     }));
 
     setFiles(prev => [...newUploads, ...prev]);
@@ -316,7 +420,7 @@ const UploadScans: React.FC = () => {
 
                 <div className="grid grid-cols-3 gap-4">
                   <AnalysisStatCard title="AI CONFIDENCE" value={`${(selectedFile.analysis.confidence * 100).toFixed(1)}%`} />
-                  <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm²` : 'N/A'} />
+                  <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm^2` : 'N/A'} />
                   <AnalysisStatCard title="TUMOUR PIXELS" value={selectedFile.analysis.pixels != null ? `${selectedFile.analysis.pixels} PX` : 'N/A'} />
                 </div>
 
@@ -324,6 +428,48 @@ const UploadScans: React.FC = () => {
                 <p className="font-semibold text-sm">Radiologist Insight:</p>
                 {/* Fix: Use insight property as defined in AnalysisResult */}
                 <p className="text-sm mt-1">{selectedFile.analysis.insight}</p>
+            </div>
+
+            <div className="mt-6 bg-white border border-gray-200 p-5 rounded-lg shadow-subtle">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-sm text-brand-text-primary">Suggestive Report</p>
+                    <p className="text-xs text-brand-text-secondary mt-1">Generated from the live FastAPI findings by your local Cloudflare Worker.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void generateSuggestiveReport(selectedFile, selectedFile.analysis!)}
+                    disabled={selectedFile.reportStatus === 'Generating'}
+                    className="bg-brand-pink text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-subtle hover:bg-brand-pink-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate Report'}
+                  </button>
+                </div>
+
+                {selectedFile.reportStatus === 'Generating' && (
+                  <div className="mt-4 flex items-center gap-3 rounded-lg border border-pink-100 bg-pink-50 px-4 py-3 text-sm text-brand-text-primary">
+                    <div className="w-4 h-4 border-2 border-brand-pink border-t-transparent rounded-full animate-spin"></div>
+                    Cloudflare Workers AI is drafting the suggestive report from the FastAPI output.
+                  </div>
+                )}
+
+                {selectedFile.reportStatus === 'Failed' && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {selectedFile.reportError || 'Report generation failed.'}
+                  </div>
+                )}
+
+                {selectedFile.suggestiveReport && (
+                  <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <pre className="whitespace-pre-wrap text-sm leading-6 text-brand-text-primary font-sans">
+                      {selectedFile.suggestiveReport}
+                    </pre>
+                  </div>
+                )}
+
+                {!selectedFile.suggestiveReport && selectedFile.reportStatus === 'Idle' && (
+                  <p className="mt-4 text-sm text-brand-text-secondary">The suggestive report will appear here after the FastAPI analysis completes.</p>
+                )}
             </div>
             </>
             ) : selectedFile.status === 'Failed' ? (
