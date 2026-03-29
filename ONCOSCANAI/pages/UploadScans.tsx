@@ -6,6 +6,13 @@ import { UploadIcon, ModelIcon, LiveIcon, VisionIcon, InfoIcon } from '../compon
 
 type ModelsResponse = {
   active_models?: string[];
+  ultrasound_models?: string[];
+};
+
+const deriveUltrasoundModels = (json: ModelsResponse) => {
+  if (Array.isArray(json.ultrasound_models)) return json.ultrasound_models;
+  const active = Array.isArray(json.active_models) ? json.active_models : [];
+  return active.filter(model => model === 'best_model' || model === 'best_seg');
 };
 
 type CombinedInferenceResponse = {
@@ -13,6 +20,8 @@ type CombinedInferenceResponse = {
   confidence?: number | string;
   insight?: string;
   engine?: string;
+  classification_engine?: string;
+  segmentation_engine?: string;
   heatmap_url?: string;
   mask?: string;
   segmentation_mask?: string;
@@ -103,7 +112,7 @@ const UploadScans: React.FC = () => {
         }
         const json = await res.json() as ModelsResponse;
         if (isMounted) {
-          setBackendModels(Array.isArray(json.active_models) ? json.active_models : []);
+          setBackendModels(deriveUltrasoundModels(json));
           setBackendError(null);
         }
       } catch (err) {
@@ -207,6 +216,8 @@ const UploadScans: React.FC = () => {
         confidence: typeof json.confidence === 'number' ? json.confidence : Number(json.confidence) || 0,
         insight: json.insight || '',
         modelUsed: json.engine || 'BEST_MODEL',
+        classificationEngine: json.classification_engine || undefined,
+        segmentationEngine: json.segmentation_engine || undefined,
         heatmapUrl: json.heatmap_url || undefined,
         // Backend should return 'mask' which may be a data URL (base64) or a URL to an overlay image
         segmentationMask: json.mask || json.segmentation_mask || undefined,
@@ -271,7 +282,7 @@ const UploadScans: React.FC = () => {
       const upload = newUploads[i];
       const fileBlob = droppedFiles.find(f => f.name === upload.name) as File;
       if (!fileBlob) continue;
-      // Run combined inference (classification from best_model.pth + masks from best.pt)
+      // Run ultrasound classification inference
       await runBestModelInference(upload, fileBlob);
     }
   };
@@ -383,9 +394,15 @@ const UploadScans: React.FC = () => {
                     <div>
                         <h2 className="text-xl font-bold text-brand-text-primary">Vision Diagnostic Analysis</h2>
                         <div className="flex items-center gap-4 text-xs mt-1 text-brand-text-secondary">
-                          <span className="flex items-center gap-1.5"><ModelIcon className="w-3.5 h-3.5"/> MODEL: {selectedFile.analysis?.modelUsed || 'YOLO'}</span>
+                          <span className="flex items-center gap-1.5"><ModelIcon className="w-3.5 h-3.5"/> MODELS: {selectedFile.analysis?.modelUsed || 'BEST_MODEL + BEST_SEG'}</span>
                           <span className="flex items-center gap-1.5 text-green-600 font-medium"><LiveIcon className="w-3.5 h-3.5"/> LIVE INFERENCE</span>
                         </div>
+                        {selectedFile.analysis && (
+                          <div className="mt-2 text-[11px] text-brand-text-secondary space-y-1">
+                            <p>Classification Engine: {selectedFile.analysis.classificationEngine || 'N/A'}</p>
+                            <p>Segmentation Engine: {selectedFile.analysis.segmentationEngine || 'N/A'}</p>
+                          </div>
+                        )}
                     </div>
                 </div>
                 {selectedFile.status === 'Complete' && selectedFile.analysis &&

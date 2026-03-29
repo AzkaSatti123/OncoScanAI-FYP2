@@ -274,6 +274,60 @@ def resolve_model_name(model_names, idx):
             return model_names[idx]
     except Exception:
         return None
+
+
+def get_engine_label_names(engine):
+    try:
+        names = getattr(engine, "names", None)
+        if isinstance(names, dict):
+            return [normalize_label(names[k]) for k in sorted(names.keys())]
+        if isinstance(names, (list, tuple)):
+            return [normalize_label(name) for name in names]
+    except Exception:
+        pass
+    return []
+
+
+def get_engine_num_classes(engine):
+    try:
+        names = get_engine_label_names(engine)
+        if names:
+            return len(names)
+    except Exception:
+        pass
+
+    try:
+        classifier = getattr(engine, "classifier", None)
+        if isinstance(classifier, nn.Sequential) and len(classifier) > 0:
+            for layer in reversed(classifier):
+                out_features = getattr(layer, "out_features", None)
+                if out_features is not None:
+                    return int(out_features)
+        out_features = getattr(classifier, "out_features", None)
+        if out_features is not None:
+            return int(out_features)
+    except Exception:
+        pass
+
+    try:
+        fc = getattr(engine, "fc", None)
+        out_features = getattr(fc, "out_features", None)
+        if out_features is not None:
+            return int(out_features)
+    except Exception:
+        pass
+
+    return None
+
+
+def is_three_class_ultrasound_engine(engine):
+    expected_labels = {"normal", "benign", "malignant"}
+    names = set(get_engine_label_names(engine))
+    if expected_labels.issubset(names):
+        return True
+
+    num_classes = get_engine_num_classes(engine)
+    return num_classes == 3
     return None
 
 def resolve_yolo_task(yolo_model):
@@ -334,7 +388,13 @@ def load_clinical_models():
     
     for f in files:
         filename_base = os.path.splitext(f)[0].lower()
-        supported_engine = filename_base in ('alexnet', 'efficient_net') or 'alex' in filename_base or 'efficient' in filename_base or 'yolo' in filename_base or 'yolov' in filename_base
+        supported_engine = (
+            filename_base in ('alexnet', 'efficient_net', 'best_model', 'best')
+            or 'alex' in filename_base
+            or 'efficient' in filename_base
+            or 'yolo' in filename_base
+            or 'yolov' in filename_base
+        )
         if not supported_engine:
             print(f"[INFO] Skipping unsupported model file {f}")
             continue
@@ -345,6 +405,10 @@ def load_clinical_models():
             engine_key = 'alexnet'
         elif 'efficient' in filename_base:
             engine_key = 'efficient_net'
+        elif filename_base == 'best_model':
+            engine_key = 'best_model'
+        elif filename_base == 'best':
+            engine_key = 'best_seg'
         elif 'oncoscan_combined' in filename_base:
             engine_key = 'breast_ai_combined'  # Map original model to expected frontend key
         else:
@@ -377,7 +441,7 @@ def load_clinical_models():
                 print(f"[OK] {engine_key.upper()} - Keras model loaded from {f}")
             else:
                 # Prefer Ultralytics YOLO loader for YOLO segmentation/classification files
-                if engine_key in ('yolo',) or 'yolo' in filename_base:
+                if engine_key in ('yolo', 'best_seg') or 'yolo' in filename_base or filename_base == 'best':
                     try:
                         from ultralytics import YOLO
                         if yolo_path is None:
@@ -389,6 +453,8 @@ def load_clinical_models():
 
                             if task == 'classify' and engine_key == 'yolo':
                                 resolved_key = 'yolo_cls'
+                            elif task == 'segment' and engine_key == 'best_seg':
+                                resolved_key = 'best_seg'
 
                             if resolved_key in engines:
                                 print(f"[INFO] Skipping {f} because '{resolved_key}' is already loaded")
@@ -440,7 +506,7 @@ def load_clinical_models():
                                 print(f"[OK] {engine_key.upper()} - State dict reconstructed from {f} ({num_classes} classes)")
                         except RuntimeError as re:
                             print(f"[ERROR] {engine_key.upper()} - Architecture mismatch: {str(re)[:60]}")
-                    elif engine_key == 'efficient_net':
+                    elif engine_key in ('efficient_net', 'best_model'):
                         try:
                             state_dict = extract_state_dict(loaded)
                             num_classes = None
@@ -585,6 +651,16 @@ def ensure_models_loaded():
         print(f"[OK] Models already in memory: {list(engines.keys())}")
 
 
+def get_histo_model_keys():
+    ensure_models_loaded()
+    return [key for key in ("alexnet", "efficient_net", "yolo") if key in engines]
+
+
+def get_ultrasound_model_keys():
+    ensure_models_loaded()
+    return [key for key in ("best_model", "best_seg") if key in engines]
+
+
 @app.on_event("startup")
 async def startup_event():
     global engines
@@ -632,17 +708,15 @@ async def startup_event():
 @app.get("/models")
 async def get_active_models():
     ensure_models_loaded()
-    return {"active_models": list(engines.keys())}
+    return {
+        "active_models": list(engines.keys()),
+        "histo_models": get_histo_model_keys(),
+        "ultrasound_models": get_ultrasound_model_keys(),
+    }
 
-@app.post("/predict/histo/{model_name}")
-async def run_inference(model_name: str, file: UploadFile = File(...)):
-    """
-    Route used by both VisionWorkbench and HistoAnalysis.
-    Performs real inference using the local .pth files.
-    """
-    # Ensure models are loaded in case startup event did not run
+def run_inference_from_bytes(model_name: str, content: bytes):
+    """Shared inference routine for API endpoints that already have the upload bytes."""
     ensure_models_loaded()
-
     target = model_name.lower()
     engine = engines.get(target)
 
@@ -652,11 +726,7 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
             detail=f"Neural engine '{target}' is not loaded. Ensure '{target}.pth' is in backend/models/"
         )
 
-
-
     try:
-        content = await file.read()
-
         def run_ultralytics_inference(yolo_engine):
             from PIL import Image
             import base64
@@ -1158,10 +1228,35 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Inference Pipeline Error: {error_msg}")
 
 
+@app.post("/predict/histo/{model_name}")
+async def run_inference(model_name: str, file: UploadFile = File(...)):
+    """
+    Route used by both VisionWorkbench and HistoAnalysis.
+    Performs real inference using the local .pth files.
+    """
+    content = await file.read()
+    return run_inference_from_bytes(model_name, content)
+
+
 
 def pick_ultrasound_classifier():
     ensure_models_loaded()
-    for key in ("yolo_cls", "yolo"):
+    preferred_keys = ("best_model", "efficient_net", "yolo_cls", "best_seg", "yolo")
+
+    for key in preferred_keys:
+        engine = engines.get(key)
+        if engine is not None and is_three_class_ultrasound_engine(engine):
+            return key
+
+    for key in preferred_keys:
+        if key in engines:
+            return key
+    return None
+
+
+def pick_ultrasound_segmenter():
+    ensure_models_loaded()
+    for key in ("best_seg", "yolo"):
         if key in engines:
             return key
     return None
@@ -1172,9 +1267,12 @@ async def run_ultrasound_segment(file: UploadFile = File(...)):
     """
     Ultrasound segmentation endpoint.
     """
-    if "yolo" not in engines:
+    model_key = pick_ultrasound_segmenter()
+    if not model_key:
         raise HTTPException(status_code=404, detail="No ultrasound segmentation model loaded")
-    return await run_inference("yolo", file)
+    response = await run_inference(model_key, file)
+    response["segmentation_engine"] = model_key.upper()
+    return response
 
 
 @app.post("/predict/ultrasound/classify")
@@ -1185,18 +1283,39 @@ async def run_ultrasound_classify(file: UploadFile = File(...)):
     model_key = pick_ultrasound_classifier()
     if not model_key:
         raise HTTPException(status_code=404, detail="No ultrasound classification model loaded")
-    return await run_inference(model_key, file)
+    response = await run_inference(model_key, file)
+    response["classification_engine"] = model_key.upper()
+    return response
 
 
 @app.post("/predict/ultrasound/combined")
 async def run_ultrasound_combined(file: UploadFile = File(...)):
     """
-    Ultrasound combined endpoint using the active ultrasound classifier only.
+    Ultrasound combined endpoint using the dedicated classifier for
+    result/confidence/insight and the dedicated segmenter for mask outputs.
     """
-    model_key = pick_ultrasound_classifier()
-    if not model_key:
+    classifier_key = pick_ultrasound_classifier()
+    segmenter_key = pick_ultrasound_segmenter()
+
+    if not classifier_key:
         raise HTTPException(status_code=404, detail="No ultrasound model loaded")
-    return await run_inference(model_key, file)
+    if not segmenter_key:
+        raise HTTPException(status_code=404, detail="No ultrasound segmentation model loaded")
+
+    content = await file.read()
+    classification_response = run_inference_from_bytes(classifier_key, content)
+    segmentation_response = run_inference_from_bytes(segmenter_key, content)
+
+    combined_response = dict(classification_response)
+    combined_response["engine"] = f"{classifier_key.upper()} + {segmenter_key.upper()}"
+    combined_response["classification_engine"] = classifier_key.upper()
+    combined_response["segmentation_engine"] = segmenter_key.upper()
+
+    for key in ("segmentation_mask", "mask_pixel_count", "mask_area_mm2", "mask_type"):
+        if key in segmentation_response:
+            combined_response[key] = segmentation_response[key]
+
+    return combined_response
 
 
 if __name__ == "__main__":

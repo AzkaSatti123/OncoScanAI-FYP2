@@ -4,6 +4,17 @@ import type { UploadedFile, AnalysisResult } from '../types';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
+type ModelsResponse = {
+  active_models?: string[];
+  histo_models?: string[];
+};
+
+const deriveHistoModels = (data: ModelsResponse) => {
+  if (Array.isArray(data.histo_models)) return data.histo_models;
+  const active = Array.isArray(data.active_models) ? data.active_models : [];
+  return active.filter(model => model === 'alexnet' || model === 'efficient_net' || model === 'yolo');
+};
+
 const VisionWorkbench: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -30,8 +41,8 @@ const VisionWorkbench: React.FC = () => {
       try {
         const response = await fetch(`${BACKEND_URL}/models`);
         if (response.ok) {
-          const data = await response.json();
-          const models = Array.isArray(data.active_models) ? data.active_models : [];
+          const data = await response.json() as ModelsResponse;
+          const models = deriveHistoModels(data);
           setAvailableModels(models);
           // Auto-select preferred engine
           if (models.length > 0) {
@@ -118,7 +129,7 @@ const VisionWorkbench: React.FC = () => {
           <div className="flex flex-col gap-2 p-1 bg-slate-50 rounded-xl max-h-40 overflow-y-auto">
             {availableModels.length === 0 && !isLoadingModels ? (
               <div className="py-6 text-center text-[10px] text-slate-400 font-bold px-4">
-                No .pth models detected.<br/>Add alexnet.pth to backend/models
+                No histology models detected.<br/>Add alexnet.pth, efficient_net.pth, or yolov11.pth
               </div>
             ) : (
               availableModels.map(m => (
@@ -316,12 +327,12 @@ const VisionWorkbench: React.FC = () => {
             </div>
             <h2 className="text-3xl font-black text-slate-800 tracking-tighter mb-4">Neural Workbench Ready</h2>
             <p className="text-slate-400 max-w-md text-sm leading-relaxed">
-              Select a diagnostic scan from your history or import a new image. Our AI engines (AlexNet/YOLO) are calibrated and standing by for real-time inference.
+              Select a diagnostic scan from your history or import a new image. Our histology engines (AlexNet, EfficientNet, and YOLO V11) are calibrated and standing by for real-time inference.
             </p>
             {availableModels.length === 0 && !isLoadingModels && (
               <div className="mt-8 p-4 bg-red-50 border border-red-100 rounded-2xl max-w-xs">
                  <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">System Warning</p>
-                 <p className="text-[11px] text-red-500 font-medium">Please add alexnet.pth or yolov11.pth to /backend/models to enable AI features.</p>
+                 <p className="text-[11px] text-red-500 font-medium">Please add alexnet.pth, efficient_net.pth, or yolov11.pth to /backend/models to enable histology features.</p>
               </div>
             )}
           </div>

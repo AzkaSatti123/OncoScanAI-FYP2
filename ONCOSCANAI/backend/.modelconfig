@@ -1,28 +1,28 @@
 {
   "models": {
     "alexnet": {
-      "file": "alexnet_backend.pth",
-      "type": "custom_format",
+      "file": "alexnet.pth",
+      "type": "alexnet_classifier",
       "num_classes": 2,
       "active": true,
       "engine_key": "alexnet"
     },
-    "best_model": {
-      "file": "best_model.pth",
+    "efficient_net": {
+      "file": "efficient_net.pth",
       "type": "efficientnet_b0",
       "num_classes": 2,
       "active": true,
-      "engine_key": "best_model"
+      "engine_key": "efficient_net"
     },
     "yolo": {
       "file": "yolov11.pth",
       "type": "ultralytics",
-      "active": false,
+      "active": true,
       "engine_key": "yolo"
     }
   },
-  "last_loaded": "2026-03-28T20:40:40.431163",
+  "last_loaded": "2026-03-29T22:00:20.105671",
   "persistence": "enabled",
-  "active_count": 3,
+  "active_count": 5,
   "models_loaded": true
 }

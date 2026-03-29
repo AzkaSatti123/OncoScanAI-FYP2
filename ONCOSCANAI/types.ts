@@ -5,6 +5,8 @@ export interface AnalysisResult {
   heatmapUrl?: string;
   insight: string;
   modelUsed: string;
+  classificationEngine?: string;
+  segmentationEngine?: string;
   segmentationMask?: string;
   maskType?: string;
   // Optional fields added for frontend visualisations and simulations

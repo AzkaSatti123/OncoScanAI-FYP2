@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import type { UploadedFile } from '../types';
 import { UploadIcon, CheckCircleIcon, InfoIcon, ModelIcon } from '../components/icons';
 
-type ModelType = 'alexnet' | 'yolo' | 'best_model';
+type ModelType = 'alexnet' | 'efficient_net' | 'yolo';
 
 const FileIcon: React.FC<{ type: UploadedFile['type'] }> = ({ type }) => (
     <div className="w-10 h-10 flex-shrink-0 mr-4 rounded-lg bg-gray-200 flex items-center justify-center border border-gray-300">
@@ -54,11 +54,11 @@ const ModelSelector: React.FC<{ selectedModel: ModelType; onSelect: (model: Mode
                 <button onClick={() => onSelect('alexnet')} className={`${baseClasses} ${selectedModel === 'alexnet' ? activeClasses : inactiveClasses}`}>
                     AlexNet
                 </button>
+                <button onClick={() => onSelect('efficient_net')} className={`${baseClasses} ${selectedModel === 'efficient_net' ? activeClasses : inactiveClasses}`}>
+                    EfficientNet
+                </button>
                 <button onClick={() => onSelect('yolo')} className={`${baseClasses} ${selectedModel === 'yolo' ? activeClasses : inactiveClasses}`}>
                     YOLO V11
-                </button>
-                <button onClick={() => onSelect('best_model')} className={`${baseClasses} ${selectedModel === 'best_model' ? activeClasses : inactiveClasses}`}>
-                    EfficientNet
                 </button>
             </div>
         </div>
