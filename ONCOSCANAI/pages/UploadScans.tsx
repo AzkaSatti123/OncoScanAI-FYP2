@@ -34,7 +34,7 @@ type WorkerReportResponse = {
   report?: string;
 };
 
-const REPORT_WORKER_URL = 'http://127.0.0.1:8787/report';
+const REPORT_WORKER_URL = 'http://127.0.0.1:8789/report';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
@@ -181,7 +181,10 @@ const UploadScans: React.FC = () => {
         reportError: undefined,
       }));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      const msg = rawMsg === 'Failed to fetch'
+        ? 'Could not reach the local Cloudflare Worker at /report. Make sure `wrangler dev` is running for `backend/cf-report-worker`.'
+        : rawMsg;
       updateUploadedFile(fileObj.id, file => ({
         ...file,
         reportStatus: 'Failed',

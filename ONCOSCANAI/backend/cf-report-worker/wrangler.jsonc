@@ -11,6 +11,7 @@
     "nodejs_compat"
   ],
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
+    "remote" : true
   }
 }

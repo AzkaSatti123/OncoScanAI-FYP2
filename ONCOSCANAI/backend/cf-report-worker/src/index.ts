@@ -74,6 +74,14 @@ export default {
 
     const url = new URL(request.url);
 
+    // Health check endpoint
+    if (url.pathname === "/" || url.pathname === "") {
+      return Response.json(
+        { status: "ok", message: "CF Report Worker is running" },
+        { headers: corsHeaders }
+      );
+    }
+
     if (url.pathname !== "/report") {
       return new Response("Not Found", { status: 404, headers: corsHeaders });
     }
