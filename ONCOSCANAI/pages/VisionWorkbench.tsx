@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UploadIcon, ModelIcon, VisionIcon, InfoIcon, DownloadIcon, PrintIcon } from '../components/icons';
 import type { UploadedFile, AnalysisResult } from '../types';
 
+const BACKEND_URL = 'http://127.0.0.1:8000';
+
 const VisionWorkbench: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -15,7 +17,7 @@ const VisionWorkbench: React.FC = () => {
     const displayNames: { [key: string]: string } = {
       'alexnet': 'AlexNet',
       'yolo': 'YOLO V11',
-      'best_model': 'EfficientNet'
+      'efficient_net': 'EfficientNet'
     };
     return displayNames[modelKey] || modelKey.toUpperCase();
   };
@@ -26,14 +28,16 @@ const VisionWorkbench: React.FC = () => {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const response = await fetch('/models');
+        const response = await fetch(`${BACKEND_URL}/models`);
         if (response.ok) {
           const data = await response.json();
-          setAvailableModels(data.active_models);
+          const models = Array.isArray(data.active_models) ? data.active_models : [];
+          setAvailableModels(models);
           // Auto-select preferred engine
-          if (data.active_models.length > 0) {
-            const preferred = data.active_models.find((m: string) => m.includes('yolo') || m.includes('alex') || m.includes('best'));
-            setActiveModel(preferred || data.active_models[0]);
+          if (models.length > 0) {
+            const preferred = models.find((m: string) => m === 'alexnet')
+              || models.find((m: string) => m.includes('alex') || m.includes('yolo') || m.includes('efficient'));
+            setActiveModel(preferred || models[0]);
           }
         }
       } catch (err) {
@@ -54,7 +58,7 @@ const VisionWorkbench: React.FC = () => {
     formData.append("file", rawFile);
 
     try {
-      const response = await fetch(`/predict/histo/${modelName}`, {
+      const response = await fetch(`${BACKEND_URL}/predict/histo/${modelName}`, {
         method: 'POST',
         body: formData,
       });

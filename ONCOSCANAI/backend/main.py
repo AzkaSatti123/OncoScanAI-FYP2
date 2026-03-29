@@ -217,6 +217,36 @@ def infer_num_classes_from_state_dict(state_dict):
     return None
 
 
+def build_alexnet_for_state_dict(state_dict, fallback_num_classes=2):
+    num_classes = fallback_num_classes
+    if isinstance(state_dict, dict):
+        final_layer = state_dict.get("classifier.6.weight")
+        if hasattr(final_layer, "shape") and len(final_layer.shape) > 0:
+            num_classes = int(final_layer.shape[0])
+        else:
+            num_classes = infer_num_classes_from_state_dict(state_dict) or fallback_num_classes
+    model = models.alexnet(weights=None)
+    if hasattr(model, "classifier") and len(model.classifier) >= 7:
+        in_features = model.classifier[6].in_features
+        model.classifier[6] = nn.Linear(in_features, int(num_classes))
+    return model, int(num_classes)
+
+
+def build_efficientnet_b0_for_state_dict(state_dict, fallback_num_classes=2):
+    num_classes = fallback_num_classes
+    if isinstance(state_dict, dict):
+        final_layer = state_dict.get("classifier.1.weight")
+        if hasattr(final_layer, "shape") and len(final_layer.shape) > 0:
+            num_classes = int(final_layer.shape[0])
+        else:
+            num_classes = infer_num_classes_from_state_dict(state_dict) or fallback_num_classes
+    model = models.efficientnet_b0(weights=None)
+    if hasattr(model, "classifier") and len(model.classifier) >= 2:
+        in_features = model.classifier[1].in_features
+        model.classifier[1] = nn.Linear(in_features, int(num_classes))
+    return model, int(num_classes)
+
+
 ULTRASOUND_CLASS_ORDER = [c.strip().lower() for c in os.environ.get("ULTRASOUND_CLASS_ORDER", "normal,benign,malignant").split(",") if c.strip()]
 
 def normalize_label(label):
@@ -234,6 +264,7 @@ def class_id_from_label(label):
         return ULTRASOUND_CLASS_ORDER.index(label)
     except ValueError:
         return None
+
 
 def resolve_model_name(model_names, idx):
     try:
@@ -290,8 +321,6 @@ def load_clinical_models():
         print(f"[INIT] Created models directory at {MODELS_DIR}. Please place your .pth files here.")
         return
 
-    # Specific targets requested: alexnet, yolov11, and best_model
-    targets = ['alexnet', 'yolo', 'yolov11', 'best_model']
     files = [f for f in os.listdir(MODELS_DIR) if f.endswith(('.pth', '.pt', '.h5'))]
     
     if not files:
@@ -305,21 +334,23 @@ def load_clinical_models():
     
     for f in files:
         filename_base = os.path.splitext(f)[0].lower()
+        supported_engine = filename_base in ('alexnet', 'efficient_net') or 'alex' in filename_base or 'efficient' in filename_base or 'yolo' in filename_base or 'yolov' in filename_base
+        if not supported_engine:
+            print(f"[INFO] Skipping unsupported model file {f}")
+            continue
         # Map filenames to the expected frontend keys ('alexnet', 'yolo', 'breast_ai_combined')
-        if filename_base in ('best_seg', 'best_cls'):
-            engine_key = filename_base
-        elif filename_base == 'best':
-            engine_key = 'best'  # resolve after YOLO task is known
-        elif 'yolo' in filename_base:
+        if 'yolo' in filename_base:
             engine_key = 'yolo'
         elif 'alex' in filename_base:
             engine_key = 'alexnet'
+        elif 'efficient' in filename_base:
+            engine_key = 'efficient_net'
         elif 'oncoscan_combined' in filename_base:
             engine_key = 'breast_ai_combined'  # Map original model to expected frontend key
         else:
             engine_key = filename_base
 
-        if engine_key != 'best' and engine_key in engines:
+        if engine_key in engines:
             print(f"[INFO] Skipping {f} because '{engine_key}' is already loaded")
             continue
 
@@ -346,7 +377,7 @@ def load_clinical_models():
                 print(f"[OK] {engine_key.upper()} - Keras model loaded from {f}")
             else:
                 # Prefer Ultralytics YOLO loader for YOLO segmentation/classification files
-                if engine_key in ('yolo', 'best', 'best_seg', 'best_cls') or 'yolo' in filename_base:
+                if engine_key in ('yolo',) or 'yolo' in filename_base:
                     try:
                         from ultralytics import YOLO
                         if yolo_path is None:
@@ -356,12 +387,7 @@ def load_clinical_models():
                             task = resolve_yolo_task(yolo_model)
                             resolved_key = engine_key
 
-                            if filename_base.startswith('best'):
-                                if task == 'classify':
-                                    resolved_key = 'best_cls'
-                                elif task == 'segment':
-                                    resolved_key = 'best_seg'
-                            elif task == 'classify' and engine_key == 'yolo':
+                            if task == 'classify' and engine_key == 'yolo':
                                 resolved_key = 'yolo_cls'
 
                             if resolved_key in engines:
@@ -391,28 +417,30 @@ def load_clinical_models():
                     print(f"[DEBUG] Detected YOLO model via predict method in {f}")
                     engines[engine_key] = loaded
                     print(f"[OK] {engine_key.upper()} - YOLO model loaded from {f}")
-                # Handle state dicts (AlexNet and best_model)
+                # Handle state dict classifier checkpoints
                 elif isinstance(loaded, dict):
                     if 'alexnet' in engine_key:
                         try:
                             # Check if it's custom format with 'architecture', 'num_classes', 'state_dict'
                             if 'architecture' in loaded and 'num_classes' in loaded and 'state_dict' in loaded:
-                                num_classes = loaded['num_classes']
-                                model = models.alexnet(pretrained=False, num_classes=num_classes)
-                                model.load_state_dict(loaded['state_dict'])
+                                state_dict = loaded['state_dict']
+                                num_classes = int(loaded['num_classes'])
+                                model, inferred_num_classes = build_alexnet_for_state_dict(state_dict, fallback_num_classes=num_classes)
+                                model.load_state_dict(state_dict)
                                 model.eval()
                                 engines[engine_key] = model
-                                print(f"[OK] {engine_key.upper()} - Custom format, {num_classes} classes, from {f}")
+                                print(f"[OK] {engine_key.upper()} - Custom format, {inferred_num_classes} classes, from {f}")
                             else:
                                 # Standard state dict
-                                model = models.alexnet(pretrained=False)
-                                model.load_state_dict(loaded)
+                                state_dict = extract_state_dict(loaded)
+                                model, num_classes = build_alexnet_for_state_dict(state_dict)
+                                model.load_state_dict(state_dict)
                                 model.eval()
                                 engines[engine_key] = model
-                                print(f"[OK] {engine_key.upper()} - State dict reconstructed from {f}")
+                                print(f"[OK] {engine_key.upper()} - State dict reconstructed from {f} ({num_classes} classes)")
                         except RuntimeError as re:
                             print(f"[ERROR] {engine_key.upper()} - Architecture mismatch: {str(re)[:60]}")
-                    elif 'best_model' in engine_key:
+                    elif engine_key == 'efficient_net':
                         try:
                             state_dict = extract_state_dict(loaded)
                             num_classes = None
@@ -421,34 +449,25 @@ def load_clinical_models():
                             if num_classes is None:
                                 num_classes = infer_num_classes_from_state_dict(state_dict)
                             if num_classes is None:
-                                num_classes = 3
+                                num_classes = 2
                             print(f"[INFO] {engine_key.upper()} - inferred num_classes={num_classes}")
 
-                            # Try EfficientNet architectures first (since user calls it EfficientNet)
-                            efficientnet_models = [
-                                ('efficientnet_b0', models.efficientnet_b0),
-                                ('efficientnet_b1', models.efficientnet_b1),
-                                ('efficientnet_b2', models.efficientnet_b2),
-                                ('efficientnet_b3', models.efficientnet_b3),
-                            ]
-
                             model_loaded = False
-                            for name, model_fn in efficientnet_models:
-                                try:
-                                    model = model_fn(pretrained=False, num_classes=int(num_classes))
-                                    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
-                                    if len(missing_keys) < 50:  # Allow reasonable missing keys
-                                        model.eval()
-                                        engines[engine_key] = model
-                                        print(f"[OK] {engine_key.upper()} - {name.upper()} loaded (partial) from {f}, missing: {len(missing_keys)}, unexpected: {len(unexpected_keys)}")
-                                        model_loaded = True
-                                        break
-                                except Exception as e:
-                                    continue
+
+                            try:
+                                model, inferred_num_classes = build_efficientnet_b0_for_state_dict(state_dict, fallback_num_classes=int(num_classes))
+                                missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+                                if len(unexpected_keys) == 0 and len(missing_keys) == 0:
+                                    model.eval()
+                                    engines[engine_key] = model
+                                    print(f"[OK] {engine_key.upper()} - EFFICIENTNET_B0 loaded from {f} ({inferred_num_classes} classes)")
+                                    model_loaded = True
+                            except Exception as e:
+                                print(f"[WARN] {engine_key.upper()} - EfficientNet-B0 direct load failed: {str(e)[:100]}")
 
                             if not model_loaded:
                                 # Try ResNet50 as fallback
-                                model = models.resnet50(pretrained=False, num_classes=int(num_classes))
+                                model = models.resnet50(weights=None, num_classes=int(num_classes))
                                 missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
                                 if len(missing_keys) < 100:
                                     model.eval()
@@ -461,7 +480,7 @@ def load_clinical_models():
 
                         except Exception as e:
                             print(f"[ERROR] {engine_key.upper()} - All loading attempts failed: {str(e)[:100]}")
-                            print(f"[WARN] {engine_key.upper()} - Cannot load best_model, skipping")
+                            print(f"[WARN] {engine_key.upper()} - Cannot reconstruct supported classifier checkpoint, skipping")
                     else:
                         print(f"[WARN] {engine_key.upper()} - Cannot reconstruct from state dict")
                 elif isinstance(loaded, torch.nn.Module) or hasattr(loaded, 'forward'):
@@ -490,18 +509,18 @@ def update_model_config():
         config = {
             "models": {
                 "alexnet": {
-                    "file": "alexnet_backend.pth",
-                    "type": "custom_format",
+                    "file": "alexnet.pth",
+                    "type": "alexnet_classifier",
                     "num_classes": 2,
                     "active": "alexnet" in engines,
                     "engine_key": "alexnet"
                 },
-                "best_model": {
-                    "file": "best_model.pth",
+                "efficient_net": {
+                    "file": "efficient_net.pth",
                     "type": "efficientnet_b0",
                     "num_classes": 2,
-                    "active": "best_model" in engines,
-                    "engine_key": "best_model"
+                    "active": "efficient_net" in engines,
+                    "engine_key": "efficient_net"
                 },
                 "yolo": {
                     "file": "yolov11.pth",
@@ -587,7 +606,7 @@ async def startup_event():
         print(f"[CHECK] Model files in {MODELS_DIR}: {pth_files}")
 
         if not pth_files:
-            print(f"[WARN] No model files found! Expected: alexnet_backend.pth, yolov11.pth")
+            print(f"[WARN] No model files found! Expected: alexnet.pth, yolov11.pth")
 
         # Load models with persistence check
         print(f"\n[LOAD] Loading persisted models...")
@@ -769,61 +788,6 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
                 response["mask_area_mm2"] = float(mask_area_mm2)
 
             return response
-
-        # Optional: allow best_model to route through YOLO segmentation only when explicitly enabled.
-        if target == 'best_model' and os.environ.get("BEST_MODEL_SEGMENTATION_ROUTING", "0") == "1":
-            # If best_model is already a YOLO engine, use it directly.
-            if is_ultralytics_yolo(engine):
-                yolo_response = run_ultralytics_inference(engine)
-                if yolo_response is not None:
-                    return yolo_response
-
-            # Ensure we execute through an Ultralytics YOLO engine rather than raw PyTorch.
-            yolo_engine = engines.get('yolo')
-
-            # If an engine isn't loaded or doesn't look like an Ultralytics model, try to load one from disk.
-            if not is_ultralytics_yolo(yolo_engine):
-                try:
-                    import ultralytics
-                    # Prefer a direct best_model.pt if present
-                    best_pt = os.path.join(MODELS_DIR, "best_model.pt")
-                    if os.path.exists(best_pt):
-                        model_path = best_pt
-                    else:
-                        model_path = None
-
-                    # Find a YOLO model file in MODELS_DIR (prefer .pt)
-                    if model_path is None:
-                        candidates = [f for f in os.listdir(MODELS_DIR) if any(k in f.lower() for k in ('yolo', 'yolov', 'best_model'))]
-                        candidates = sorted(candidates, key=lambda n: 0 if n.lower().endswith('.pt') else 1)
-                        if candidates:
-                            model_path = os.path.join(MODELS_DIR, candidates[0])
-                            if model_path.lower().endswith('.pth'):
-                                alt = os.path.splitext(model_path)[0] + '.pt'
-                                if os.path.exists(alt):
-                                    model_path = alt
-
-                    if model_path is not None:
-                        print(f"[INFO] Loading Ultralytics YOLO for best_model routing from: {model_path}")
-                        try:
-                            yolo_engine = ultralytics.YOLO(model_path)
-                            engines['yolo'] = yolo_engine
-                        except Exception as e:
-                            print(f"[WARN] Failed to load YOLO model from {model_path}: {e}")
-                    else:
-                        print("[WARN] No YOLO model files found in MODELS_DIR for best_model routing")
-                except Exception as e:
-                    print(f"[WARN] ultralytics import or YOLO loading failed: {e}")
-
-            if is_ultralytics_yolo(yolo_engine):
-                try:
-                    yolo_response = run_ultralytics_inference(yolo_engine)
-                    if yolo_response is not None:
-                        return yolo_response
-                except Exception as e:
-                    print(f"[ERROR] YOLO routing for best_model failed: {e}")
-            else:
-                print("[WARN] 'yolo' engine not available; proceeding with original best_model inference")
 
         # Generic YOLO inference path
         if is_ultralytics_yolo(engine):
@@ -1038,24 +1002,6 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
 
                 num_classes = int(probs.numel())
 
-                # For best_model, only apply bias guard in binary setups
-                if target == 'best_model' and num_classes == 2:
-                    prob_0 = float(probs[0])
-                    prob_1 = float(probs[1])
-
-                    # If model shows extreme bias (>0.99 confidence), it might be broken
-                    if prob_0 > 0.99 or prob_1 > 0.99:
-                        print(f"[CRITICAL] Model shows extreme bias - prob_0: {prob_0:.4f}, prob_1: {prob_1:.4f}")
-                        # Force a more balanced prediction by reducing confidence
-                        if prob_0 > prob_1:
-                            probs = torch.tensor([0.6, 0.4])  # Favor class 0 but not extremely
-                        else:
-                            probs = torch.tensor([0.4, 0.6])  # Favor class 1 but not extremely
-
-                        max_result = torch.max(probs, dim=0)
-                        confidence = max_result.values
-                        predicted_idx = max_result.indices
-
                 if num_classes == 2:
                     classes = ["Benign", "Malignant"]
                 elif num_classes == 3:
@@ -1118,30 +1064,37 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
                 overlay_img.save(buf, format='PNG')
                 mask_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
-            # Case B: Raw torch.Tensor segmentation output (e.g., best_model.pth producing [B,C,H,W] or [C,H,W] or [H,W])
+            # Case B: Raw torch.Tensor segmentation output producing [B,C,H,W], [C,H,W], or [H,W]
             elif 'output' in locals() and isinstance(output, torch.Tensor):
                 import base64
                 from PIL import Image
 
                 tensor = output
-                # If batch dim present, remove it when batch==1
-                if tensor.dim() == 4 and tensor.size(0) == 1:
-                    tensor = tensor[0]
+                # Classification logits like [B, C] or [C] are not segmentation masks.
+                if tensor.dim() <= 2:
+                    tensor = None
 
-                # Now tensor can be [C,H,W] or [H,W]
-                if tensor.dim() == 3:
-                    C, H, W = tensor.shape
-                    if C == 1:
-                        probs = torch.sigmoid(tensor[0])
-                        combined = (probs.cpu().numpy() > 0.5).astype(np.uint8)
-                    else:
-                        # multiclass segmentation: take argmax across channel dim
-                        preds = torch.argmax(tensor, dim=0).cpu().numpy()
-                        combined = (preds > 0).astype(np.uint8)
-                elif tensor.dim() == 2:
-                    combined = (tensor.cpu().numpy() > 0.5).astype(np.uint8)
-                else:
+                if tensor is None:
                     combined = None
+                else:
+                    # If batch dim present, remove it when batch==1
+                    if tensor.dim() == 4 and tensor.size(0) == 1:
+                        tensor = tensor[0]
+
+                    # Now tensor can be [C,H,W] or [H,W]
+                    if tensor.dim() == 3:
+                        C, H, W = tensor.shape
+                        if C == 1:
+                            probs = torch.sigmoid(tensor[0])
+                            combined = (probs.cpu().numpy() > 0.5).astype(np.uint8)
+                        else:
+                            # multiclass segmentation: take argmax across channel dim
+                            preds = torch.argmax(tensor, dim=0).cpu().numpy()
+                            combined = (preds > 0).astype(np.uint8)
+                    elif tensor.dim() == 2:
+                        combined = (tensor.cpu().numpy() > 0.5).astype(np.uint8)
+                    else:
+                        combined = None
 
                 if combined is not None:
                     mask_pixel_count = int(np.sum(combined))
@@ -1208,7 +1161,7 @@ async def run_inference(model_name: str, file: UploadFile = File(...)):
 
 def pick_ultrasound_classifier():
     ensure_models_loaded()
-    for key in ("best_cls", "best_seg", "yolo_cls", "yolo", "best_model"):
+    for key in ("yolo_cls", "yolo"):
         if key in engines:
             return key
     return None
@@ -1217,10 +1170,11 @@ def pick_ultrasound_classifier():
 @app.post("/predict/ultrasound/segment")
 async def run_ultrasound_segment(file: UploadFile = File(...)):
     """
-    Ultrasound segmentation endpoint (YOLOv8 best_model).
-    Returns masks + class predictions when available.
+    Ultrasound segmentation endpoint.
     """
-    return await run_inference("best_seg", file)
+    if "yolo" not in engines:
+        raise HTTPException(status_code=404, detail="No ultrasound segmentation model loaded")
+    return await run_inference("yolo", file)
 
 
 @app.post("/predict/ultrasound/classify")
@@ -1237,61 +1191,12 @@ async def run_ultrasound_classify(file: UploadFile = File(...)):
 @app.post("/predict/ultrasound/combined")
 async def run_ultrasound_combined(file: UploadFile = File(...)):
     """
-    Ultrasound combined endpoint:
-    - Classification from best_model.pth
-    - Segmentation + masks from best.pt (best_seg)
+    Ultrasound combined endpoint using the active ultrasound classifier only.
     """
-    ensure_models_loaded()
-
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty upload")
-
-    cls_resp = None
-    seg_resp = None
-
-    try:
-        cls_file = UploadFile(filename=file.filename, file=io.BytesIO(content))
-        cls_engine_key = pick_ultrasound_classifier()
-        if cls_engine_key:
-            cls_resp = await run_inference(cls_engine_key, cls_file)
-        else:
-            print("[WARN] No ultrasound classification model loaded")
-    except Exception as e:
-        print(f"[WARN] Combined classification failed: {e}")
-
-    try:
-        seg_file = UploadFile(filename=file.filename, file=io.BytesIO(content))
-        seg_resp = await run_inference("best_seg", seg_file)
-    except Exception as e:
-        print(f"[WARN] Combined segmentation failed: {e}")
-
-    if cls_resp is None and seg_resp is None:
-        raise HTTPException(status_code=500, detail="Combined inference failed for both models")
-
-    response = {}
-    if cls_resp:
-        response.update({
-            "result": cls_resp.get("result"),
-            "confidence": cls_resp.get("confidence"),
-            "insight": cls_resp.get("insight"),
-            "class_id": cls_resp.get("class_id"),
-        })
-
-    if seg_resp:
-        for key in ("segmentation_mask", "mask_pixel_count", "mask_area_mm2", "mask_type"):
-            if key in seg_resp:
-                response[key] = seg_resp[key]
-
-    engines_used = []
-    if cls_resp and cls_resp.get("engine"):
-        engines_used.append(cls_resp.get("engine"))
-    if seg_resp and seg_resp.get("engine"):
-        engines_used.append(seg_resp.get("engine"))
-    response["engine"] = " + ".join(engines_used) if engines_used else "COMBINED"
-    response["timestamp"] = "Live Neural Inference"
-
-    return response
+    model_key = pick_ultrasound_classifier()
+    if not model_key:
+        raise HTTPException(status_code=404, detail="No ultrasound model loaded")
+    return await run_inference(model_key, file)
 
 
 if __name__ == "__main__":
