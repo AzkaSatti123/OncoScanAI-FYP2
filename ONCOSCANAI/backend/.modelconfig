@@ -21,8 +21,8 @@
       "engine_key": "yolo"
     }
   },
-  "last_loaded": "2026-03-30T01:22:25.636489",
+  "last_loaded": "2026-04-16T00:23:29.472314",
   "persistence": "enabled",
-  "active_count": 5,
+  "active_count": 6,
   "models_loaded": true
 }

@@ -12,13 +12,20 @@ import numpy as np
 import os
 import json
 import io
+import tempfile
 from typing import Dict
 from datetime import datetime
 from utils import preprocess_medical_image
 
 # Custom Keras layers for loading oncoscan_combined.h5
-from keras.layers import Layer, Conv2D, Dropout, MaxPool2D, UpSampling2D, Concatenate, Multiply, Conv2DTranspose, BatchNormalization, Activation, Add
-import tensorflow as tf
+from tensorflow.keras.layers import Layer, Conv2D, Dropout, MaxPool2D, UpSampling2D, Concatenate, Multiply, Conv2DTranspose, BatchNormalization, Activation, Add
+
+# Custom Dense layer to handle quantization_config
+class CustomDense(tf.keras.layers.Dense):
+    def __init__(self, quantization_config=None, **kwargs):
+        # Remove quantization_config if present
+        kwargs.pop('quantization_config', None)
+        super().__init__(**kwargs)
 
 def concat_func(x=None, **kwargs):
     """Custom function for Lambda layer concatenation"""
@@ -248,6 +255,26 @@ def build_efficientnet_b0_for_state_dict(state_dict, fallback_num_classes=2):
 
 
 ULTRASOUND_CLASS_ORDER = [c.strip().lower() for c in os.environ.get("ULTRASOUND_CLASS_ORDER", "normal,benign,malignant").split(",") if c.strip()]
+MASTER_HISTO_CLASS_LABELS = {
+    0: "adenosis",
+    1: "ductal_carcinoma",
+    2: "fibroadenoma",
+    3: "lobular_carcinoma",
+    4: "mucinous_carcinoma",
+    5: "papillary_carcinoma",
+    6: "phyllodes_tumor",
+    7: "tubular_adenoma",
+}
+MASTER_HISTO_DIAGNOSIS_BY_LABEL = {
+    "adenosis": "benign",
+    "ductal_carcinoma": "malignant",
+    "fibroadenoma": "benign",
+    "lobular_carcinoma": "malignant",
+    "mucinous_carcinoma": "malignant",
+    "papillary_carcinoma": "malignant",
+    "phyllodes_tumor": "benign",
+    "tubular_adenoma": "benign",
+}
 
 def normalize_label(label):
     if label is None:
@@ -330,6 +357,75 @@ def is_three_class_ultrasound_engine(engine):
     return num_classes == 3
     return None
 
+
+def preprocess_master_histo_image(content: bytes) -> np.ndarray:
+    """
+    Apply the master model preprocessing path exactly as provided:
+    load_img(path, target_size=(224, 224)) -> img_to_array -> expand_dims.
+    """
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            temp_file.write(content)
+            temp_path = temp_file.name
+
+        image = tf.keras.utils.load_img(temp_path, target_size=(224, 224))
+        img_array = tf.keras.utils.img_to_array(image)
+        return np.expand_dims(img_array, axis=0)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+def to_probability_vector(raw_output) -> np.ndarray:
+    """Convert model output into a stable 1D probability vector."""
+    probs = np.array(raw_output, dtype=np.float32).squeeze()
+    if probs.ndim == 0:
+        scalar = float(probs)
+        probs = np.array([1.0 - scalar, scalar], dtype=np.float32)
+    if probs.ndim != 1:
+        probs = probs.reshape(-1)
+
+    if probs.size == 0:
+        raise ValueError("Model returned an empty prediction vector")
+
+    if np.any(probs < 0.0) or np.any(probs > 1.0) or not np.isclose(float(np.sum(probs)), 1.0, atol=1e-3):
+        shifted = probs - np.max(probs)
+        exp_scores = np.exp(shifted)
+        total = np.sum(exp_scores)
+        if total == 0:
+            raise ValueError("Could not normalize prediction scores")
+        probs = exp_scores / total
+
+    return probs
+
+
+def classify_master_pathology_group(class_id: int):
+    """Derive benign vs malignant from the predicted subtype class."""
+    result_label = MASTER_HISTO_CLASS_LABELS.get(class_id, "")
+    return MASTER_HISTO_DIAGNOSIS_BY_LABEL.get(result_label, "unknown")
+
+
+def summarize_master_histo_prediction(probabilities: np.ndarray):
+    """Pick the top subtype first, then derive its pathology group."""
+    probs = np.array(probabilities, dtype=np.float32).reshape(-1)
+    if probs.size != len(MASTER_HISTO_CLASS_LABELS):
+        raise ValueError(f"Expected {len(MASTER_HISTO_CLASS_LABELS)} master classes, got {probs.size}")
+
+    class_id = int(np.argmax(probs))
+    confidence = float(probs[class_id])
+    result_label = MASTER_HISTO_CLASS_LABELS.get(class_id, f"unknown_{class_id}")
+    pathology_group = classify_master_pathology_group(class_id)
+    diagnosis_confidence = float(np.sum([
+        probs[idx]
+        for idx, label in MASTER_HISTO_CLASS_LABELS.items()
+        if MASTER_HISTO_DIAGNOSIS_BY_LABEL.get(label) == pathology_group
+    ]))
+    return class_id, confidence, result_label, pathology_group, diagnosis_confidence
+
 def resolve_yolo_task(yolo_model):
     task = getattr(yolo_model, "task", None)
     if task is None:
@@ -389,11 +485,13 @@ def load_clinical_models():
     for f in files:
         filename_base = os.path.splitext(f)[0].lower()
         supported_engine = (
-            filename_base in ('alexnet', 'efficient_net', 'best_model', 'best')
+            filename_base in ('alexnet', 'efficient_net', 'best_model', 'best', 'oncoscanai_master_model')
             or 'alex' in filename_base
             or 'efficient' in filename_base
             or 'yolo' in filename_base
             or 'yolov' in filename_base
+            or 'oncoscan' in filename_base
+            or 'master' in filename_base
         )
         if not supported_engine:
             print(f"[INFO] Skipping unsupported model file {f}")
@@ -411,6 +509,8 @@ def load_clinical_models():
             engine_key = 'best_seg'
         elif 'oncoscan_combined' in filename_base:
             engine_key = 'breast_ai_combined'  # Map original model to expected frontend key
+        elif 'oncoscan' in filename_base or 'master' in filename_base:
+            engine_key = 'master'
         else:
             engine_key = filename_base
 
@@ -432,13 +532,32 @@ def load_clinical_models():
 
 
         try:
-            # Handle .h5 files (Keras models) - Note: Custom layers removed, standard Keras models only
+            # Handle .h5 files (Keras models)
             if f.endswith('.h5'):
                 print(f"[DEBUG] Loading Keras model {f}...")
-                loaded = keras.models.load_model(path)
-                print(f"[DEBUG] Loaded {f}, type: {type(loaded).__name__}")
-                engines[engine_key] = loaded
-                print(f"[OK] {engine_key.upper()} - Keras model loaded from {f}")
+                try:
+                    # Try loading without custom objects first
+                    loaded = keras.models.load_model(path)
+                    print(f"[DEBUG] Loaded {f} without custom objects, type: {type(loaded).__name__}")
+                    engines[engine_key] = loaded
+                    print(f"[OK] {engine_key.upper()} - Keras model loaded from {f}")
+                except Exception as e1:
+                    print(f"[WARN] Loading {f} without custom objects failed: {str(e1)}")
+                    try:
+                        custom_objects = {
+                            'EncoderBlock': EncoderBlock,
+                            'DecoderBlock': DecoderBlock,
+                            'AttentionGate': AttentionGate,
+                            'concat_func': concat_func,
+                            'Dense': CustomDense,  # Handle quantization_config
+                        }
+                        loaded = keras.models.load_model(path, custom_objects=custom_objects)
+                        print(f"[DEBUG] Loaded {f} with custom objects, type: {type(loaded).__name__}")
+                        engines[engine_key] = loaded
+                        print(f"[OK] {engine_key.upper()} - Keras model loaded from {f}")
+                    except Exception as e2:
+                        print(f"[ERROR] {engine_key.upper()} - Loading failed even with custom objects: {str(e2)}")
+                        print(f"[WARN] Skipping {f} due to loading error")
             else:
                 # Prefer Ultralytics YOLO loader for YOLO segmentation/classification files
                 if engine_key in ('yolo', 'best_seg') or 'yolo' in filename_base or filename_base == 'best':
@@ -653,7 +772,7 @@ def ensure_models_loaded():
 
 def get_histo_model_keys():
     ensure_models_loaded()
-    return [key for key in ("alexnet", "efficient_net", "yolo") if key in engines]
+    return [key for key in ("alexnet", "efficient_net", "yolo", "master") if key in engines]
 
 
 def get_ultrasound_model_keys():
@@ -727,6 +846,50 @@ def run_inference_from_bytes(model_name: str, content: bytes):
         )
 
     try:
+        # Handle Keras models
+        if isinstance(engine, tf.keras.Model):
+            if target == "master":
+                input_array = preprocess_master_histo_image(content)
+                predictions = engine.predict(input_array, verbose=0)
+                probs = to_probability_vector(predictions[0])
+                class_id, confidence, result_label, pathology_group, pathology_confidence = summarize_master_histo_prediction(probs)
+                response = {
+                    "subclass": result_label,
+                    "subclass_prediction": result_label,
+                    "result": result_label,
+                    "confidence": confidence,
+                    "class_id": class_id,
+                    "pathology_group": pathology_group,
+                    "pathology_confidence": pathology_confidence,
+                    "diagnosis": pathology_group,
+                    "diagnosis_prediction": pathology_group,
+                    "insight": f"Master model predicted subclass {result_label} with {confidence:.1%} confidence and classified it as {pathology_group}"
+                }
+                return response
+            else:
+                from PIL import Image
+                image = Image.open(io.BytesIO(content)).convert('RGB')
+                img_array = tf.keras.preprocessing.image.img_to_array(image)
+                img_array = tf.image.resize(img_array, (224, 224))
+                img_array = np.expand_dims(img_array, axis=0)
+                predictions = engine.predict(img_array, verbose=0)
+                if predictions.shape[-1] == 2:
+                    class_id = int(np.argmax(predictions[0]))
+                    confidence = float(predictions[0][class_id])
+                    result_label = ['benign', 'malignant'][class_id]
+                else:
+                    prob = float(tf.sigmoid(predictions[0][0]).numpy())
+                    class_id = 1 if prob > 0.5 else 0
+                    confidence = prob if class_id == 1 else 1 - prob
+                    result_label = 'malignant' if class_id == 1 else 'benign'
+            response = {
+                "result": result_label,
+                "confidence": confidence,
+                "class_id": class_id,
+                "insight": f"Master model predicted {result_label} with {confidence:.1%} confidence"
+            }
+            return response
+
         def run_ultralytics_inference(yolo_engine):
             from PIL import Image
             import base64

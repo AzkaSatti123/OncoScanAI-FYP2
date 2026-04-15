@@ -1,9 +1,7 @@
 
 import React, { useState } from 'react';
-import type { UploadedFile } from '../types';
-import { UploadIcon, CheckCircleIcon, InfoIcon, ModelIcon } from '../components/icons';
-
-type ModelType = 'alexnet' | 'efficient_net' | 'yolo';
+import type { HistoPrediction, UploadedFile } from '../types';
+import { UploadIcon, CheckCircleIcon, InfoIcon } from '../components/icons';
 
 const FileIcon: React.FC<{ type: UploadedFile['type'] }> = ({ type }) => (
     <div className="w-10 h-10 flex-shrink-0 mr-4 rounded-lg bg-gray-200 flex items-center justify-center border border-gray-300">
@@ -11,7 +9,11 @@ const FileIcon: React.FC<{ type: UploadedFile['type'] }> = ({ type }) => (
     </div>
 );
 
-const PredictionResult: React.FC<{ prediction: any }> = ({ prediction }) => {
+type ErrorResponse = {
+    detail?: string;
+};
+
+const PredictionResult: React.FC<{ prediction: HistoPrediction }> = ({ prediction }) => {
     if (!prediction) return null;
     const confidenceColor = prediction.confidence > 0.8 ? 'bg-brand-pink' : prediction.confidence > 0.6 ? 'bg-yellow-500' : 'bg-green-500';
     const getResultClass = (result: string) => {
@@ -43,32 +45,10 @@ const PredictionResult: React.FC<{ prediction: any }> = ({ prediction }) => {
     );
 };
 
-const ModelSelector: React.FC<{ selectedModel: ModelType; onSelect: (model: ModelType) => void; }> = ({ selectedModel, onSelect }) => {
-    const baseClasses = "px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-200 focus:outline-none";
-    const activeClasses = "bg-brand-pink text-white shadow-lg shadow-pink-100 ring-2 ring-white ring-offset-2 ring-offset-brand-pink";
-    const inactiveClasses = "bg-white text-gray-400 hover:text-gray-600 border border-gray-200";
-
-    return (
-        <div className="flex items-center gap-6">
-            <div className="flex p-1 bg-gray-100 rounded-xl space-x-1 border border-gray-200">
-                <button onClick={() => onSelect('alexnet')} className={`${baseClasses} ${selectedModel === 'alexnet' ? activeClasses : inactiveClasses}`}>
-                    AlexNet
-                </button>
-                <button onClick={() => onSelect('efficient_net')} className={`${baseClasses} ${selectedModel === 'efficient_net' ? activeClasses : inactiveClasses}`}>
-                    EfficientNet
-                </button>
-                <button onClick={() => onSelect('yolo')} className={`${baseClasses} ${selectedModel === 'yolo' ? activeClasses : inactiveClasses}`}>
-                    YOLO V11
-                </button>
-            </div>
-        </div>
-    );
-};
-
 const HistoAnalysis: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<ModelType>('alexnet');
+
 
   const handleFiles = async (newFiles: File[]) => {
     const newUploads: UploadedFile[] = newFiles.map((file, index) => {
@@ -102,7 +82,7 @@ const HistoAnalysis: React.FC = () => {
                 }));
             }, 100);
 
-            const response = await fetch(`/predict/histo/${selectedModel}`, {
+            const response = await fetch(`/predict/histo/master`, {
                 method: 'POST',
                 body: formData,
             });
@@ -110,11 +90,11 @@ const HistoAnalysis: React.FC = () => {
             clearInterval(progressInterval);
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: `Inference failed: ${response.statusText}` }));
+                const errorData = await response.json().catch((): ErrorResponse => ({ detail: `Inference failed: ${response.statusText}` })) as ErrorResponse;
                 throw new Error(errorData.detail || 'Analysis failed');
             }
-            
-            const result = await response.json();
+             
+            const result = await response.json() as HistoPrediction;
             setFiles(currentFiles => currentFiles.map(f => f.id === upload.id ? { ...f, status: 'Complete', progress: 100, prediction: result } : f));
 
         } catch (error) {
@@ -138,10 +118,13 @@ const HistoAnalysis: React.FC = () => {
     <div className="space-y-8">
       <div className="bg-white p-8 rounded-[2rem] shadow-subtle border border-gray-100 flex justify-between items-center bg-gradient-to-r from-white to-slate-50">
         <div>
-            <h2 className="text-3xl font-black text-brand-text-primary tracking-tighter mb-2">Histo Analysis</h2>
-            <p className="text-brand-text-secondary text-sm font-medium">Deploying local neural weights for tissue classification.</p>
+            <h2 className="text-3xl font-black text-brand-text-primary tracking-tighter mb-2">Multi-Class Histo Analysis</h2>
+            <p className="text-brand-text-secondary text-sm font-medium">Deploying the OncoScanAI Master model for multi-class histology inference.</p>
         </div>
-        <ModelSelector selectedModel={selectedModel} onSelect={setSelectedModel} />
+        <div className="inline-flex items-center gap-3 rounded-3xl bg-brand-pink/10 border border-brand-pink/20 px-5 py-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-pink">Active Model</span>
+            <span className="rounded-full bg-white px-4 py-2 text-[11px] font-bold text-brand-text-primary border border-gray-200">OncoScanAI Master</span>
+        </div>
       </div>
 
       <div className="bg-white p-2 rounded-[2.5rem] shadow-subtle border border-gray-100 overflow-hidden">

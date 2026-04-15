@@ -34,7 +34,7 @@ type WorkerReportResponse = {
   report?: string;
 };
 
-const REPORT_WORKER_URL = 'http://127.0.0.1:8789/report';
+const REPORT_WORKER_URL = '/report';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (bytes === 0) return '0 Bytes';

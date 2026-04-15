@@ -3,6 +3,8 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import VisionWorkbench from './pages/VisionWorkbench';
 import UploadScans from './pages/UploadScans';
+import HistoAnalysis from './pages/HistoAnalysis';
+import MultiClassHistoAnalysis from './pages/MultiClassHistoAnalysis';
 
 import PatientData from './pages/PatientData';
 import Reports from './pages/Reports';
@@ -17,6 +19,7 @@ const App: React.FC = () => {
         <Route path="/dashboard/patient-data" element={<PatientData />} />
         <Route path="/dashboard/vision-workbench" element={<VisionWorkbench />} />
         <Route path="/dashboard/ultrasound-analysis" element={<UploadScans />} />
+        <Route path="/dashboard/multi-class-histo" element={<MultiClassHistoAnalysis />} />
         <Route path="/dashboard/reports" element={<Reports />} />
         <Route path="/dashboard/settings" element={<Settings />} />
         {/* Keep old routes for compatibility if needed, or redirect */}

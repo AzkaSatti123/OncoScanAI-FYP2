@@ -4,13 +4,15 @@
     "best_seg",
     "best_model",
     "efficient_net",
+    "master",
     "yolo"
   ],
-  "timestamp": "2026-03-30T01:22:25.643907",
+  "timestamp": "2026-04-16T00:23:29.476734",
   "model_files": [
     "alexnet.pth",
     "best.pt",
     "best_model.pth",
+    "breakhis_all_models.pth",
     "efficient_net.pth",
     "yolov11.pth"
   ]

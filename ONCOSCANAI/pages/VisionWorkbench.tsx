@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UploadIcon, ModelIcon, VisionIcon, InfoIcon, DownloadIcon, PrintIcon } from '../components/icons';
-import type { UploadedFile, AnalysisResult } from '../types';
+import type { UploadedFile, AnalysisResult, HistoPrediction } from '../types';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
@@ -9,8 +9,16 @@ type ModelsResponse = {
   histo_models?: string[];
 };
 
+const toAnalysisPathology = (result?: string): AnalysisResult['pathology'] => {
+  const normalized = (result || '').toLowerCase();
+  if (normalized === 'malignant') return 'Malignant';
+  if (normalized === 'benign') return 'Benign';
+  if (normalized === 'normal') return 'Normal';
+  return 'Inconclusive';
+};
+
 const deriveHistoModels = (data: ModelsResponse) => {
-  if (Array.isArray(data.histo_models)) return data.histo_models;
+  if (Array.isArray(data.histo_models)) return data.histo_models.filter(m => m !== 'master');
   const active = Array.isArray(data.active_models) ? data.active_models : [];
   return active.filter(model => model === 'alexnet' || model === 'efficient_net' || model === 'yolo');
 };
@@ -76,12 +84,12 @@ const VisionWorkbench: React.FC = () => {
 
       if (!response.ok) throw new Error(await response.text());
 
-      const data = await response.json();
+      const data = await response.json() as HistoPrediction;
       
       const analysis: AnalysisResult = {
-        pathology: data.result as any,
+        pathology: toAnalysisPathology(data.result),
         confidence: data.confidence,
-        insight: data.insight,
+        insight: data.insight || 'The selected model completed the histology analysis.',
         modelUsed: getModelDisplayName(modelName)
       };
 

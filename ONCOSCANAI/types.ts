@@ -16,6 +16,34 @@ export interface AnalysisResult {
   lesionLocation?: any;
 }
 
+export interface HistoPrediction {
+  subclass?: string;
+  subclass_prediction?: string;
+  result: string;
+  confidence: number;
+  diagnosis?: 'benign' | 'malignant' | 'normal' | 'inconclusive' | 'unknown';
+  diagnosis_prediction?: 'benign' | 'malignant' | 'normal' | 'inconclusive' | 'unknown';
+  pathology_group?: 'benign' | 'malignant' | 'normal' | 'inconclusive' | 'unknown';
+  pathology_confidence?: number;
+  class_id?: number;
+  insight?: string;
+}
+
+export interface ReportSection {
+  title: string;
+  description?: string;
+  subsections?: Array<{
+    label: string;
+    content: string;
+    isHighlighted?: boolean;
+  }>;
+}
+
+export interface StructuredReport {
+  patientInfo?: Record<string, string>;
+  sections: ReportSection[];
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -28,11 +56,10 @@ export interface UploadedFile {
   // Progress tracker for async operations used in HistoAnalysis
   progress?: number;
   // Specific prediction format used in HistoAnalysis
-  prediction?: {
-    result: 'Benign' | 'Malignant' | 'Normal' | 'Inconclusive';
-    confidence: number;
-  };
+  prediction?: HistoPrediction;
   suggestiveReport?: string;
+  structuredReport?: StructuredReport;
   reportStatus?: 'Idle' | 'Generating' | 'Complete' | 'Failed';
   reportError?: string;
+  magnificationLevel?: string;
 }
