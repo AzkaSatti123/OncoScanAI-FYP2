@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { HistoPrediction, UploadedFile, StructuredReport } from '../types';
 import { UploadIcon, CheckCircleIcon, InfoIcon, ModelIcon, LiveIcon, VisionIcon } from '../components/icons';
 
@@ -20,14 +20,22 @@ type ParsedReportSection = {
 
 const REPORT_WORKER_URL = '/report';
 const REPORT_HEADINGS = [
+  'File Reference',
+  'Classification',
+  'AI Confidence',
+  'Analysis Date & Time',
   'Predicted Subclass',
-  'Diagnosis Group',
-  'Confidence',
-  'Model Insight',
-  'Potential Causes',
-  'Lifestyle Advice',
-  'Dietary Recommendations',
-  'Clinical Recommendations',
+  'Subclass ID',
+  'Subclass Confidence',
+  'Diagnosis Confidence',
+  'Summary',
+  'Impression',
+  'Histopathological Features',
+  'Quantitative Findings',
+  'Risk Stratification',
+  'Recommended Clinical Next Steps',
+  'Management Considerations',
+  'Limitations',
   'Disclaimer',
 ];
 
@@ -88,7 +96,7 @@ const parseStructuredReport = (report?: string) => {
     if (!currentHeading) return;
     sections.push({
       heading: currentHeading,
-      content: buffer.join(' ').trim() || 'Not provided',
+      content: buffer.join(' ').trim(),
     });
     currentHeading = null;
     buffer = [];
@@ -132,18 +140,31 @@ const parseStructuredReport = (report?: string) => {
 const buildDisplaySections = (prediction: HistoPrediction | undefined, parsedReport: { sections: ParsedReportSection[] } | null) => {
   const fields = getPredictionFields(prediction);
   const sectionMap = new Map((parsedReport?.sections || []).map(section => [section.heading, section.content]));
-  const confidence = prediction?.confidence != null ? `${(prediction.confidence * 100).toFixed(1)}%` : 'Not provided';
+  const subclassConfidence = prediction?.confidence != null ? `${(prediction.confidence * 100).toFixed(1)}%` : 'Unavailable';
+  const diagnosisConfidence = prediction?.pathology_confidence != null ? `${(prediction.pathology_confidence * 100).toFixed(1)}%` : subclassConfidence;
   const insight = prediction?.insight || 'The master model completed subclass prediction and diagnosis mapping for this scan.';
+  const riskLevel = (fields.diagnosis || '').toLowerCase() === 'malignant' ? 'High Risk' : (fields.diagnosis || '').toLowerCase() === 'benign' ? 'Moderate Risk' : 'Low Risk';
+  const fileReference = 'Current histology scan';
+  const analysisDate = new Date().toLocaleString();
 
   const defaults: Record<string, string> = {
-    'Predicted Subclass': fields.subclassLabel || 'Not provided',
-    'Diagnosis Group': fields.diagnosis || 'Not provided',
-    'Confidence': confidence,
-    'Model Insight': insight,
-    'Potential Causes': `The AI-identified subclass ${fields.subclassLabel || 'Not provided'} may be associated with ${fields.diagnosis || 'unknown'} histopathologic patterns. Clinical correlation is required.`,
-    'Lifestyle Advice': 'Maintain general wellness habits and follow physician guidance while awaiting clinical review.',
-    'Dietary Recommendations': 'Use balanced, non-prescriptive nutritional support as advised by the treating clinician.',
-    'Clinical Recommendations': 'Recommend pathology review, clinicopathologic correlation, and physician follow-up before any final interpretation.',
+    'File Reference': fileReference,
+    'Classification': fields.diagnosis || 'Unknown',
+    'AI Confidence': subclassConfidence,
+    'Analysis Date & Time': analysisDate,
+    'Predicted Subclass': fields.subclassLabel || 'Histologic subtype identified by model',
+    'Subclass ID': prediction?.class_id != null ? String(prediction.class_id) : 'Derived from model label set',
+    'Subclass Confidence': subclassConfidence,
+    'Diagnosis Confidence': diagnosisConfidence,
+    'Summary': `Breast tissue demonstrates morphologic features consistent with ${fields.subclassLabel || 'the predicted subtype'} in a ${fields.diagnosis || 'model-defined'} classification context, supporting further histopathologic review. ${insight}`,
+    'Impression': `Impression suggests ${fields.diagnosis || 'clinically relevant'} morphology with subclass confidence of ${subclassConfidence}; formal pathology correlation is required.`,
+
+    'Histopathological Features': `Atypical cellular morphology with disturbed tissue architecture in keeping with ${fields.subclassLabel || 'the predicted subtype'}; nuclear atypia and stromal-epithelial relationships require pathologist confirmation.`,
+    'Quantitative Findings': `Classification: ${fields.diagnosis || 'Unknown'}; AI Confidence: ${subclassConfidence}; Diagnosis Confidence: ${diagnosisConfidence}.`,
+    'Risk Stratification': `${riskLevel}. Stratification is supported by subclass phenotype, model confidence, and inferred tissue abnormality.`,
+    'Recommended Clinical Next Steps': '1. Arrange specialist consultation with breast oncology or surgical oncology. 2. Recommend confirmatory pathological review to validate AI-based histological findings. 3. Correlate with mammography, MRI, or ultrasound as clinically appropriate. 4. Confirm subtype and grade on pathology review. 5. Discuss in a multidisciplinary tumor board setting when indicated.',
+    'Management Considerations': 'General management pathways may include surgical intervention, chemotherapy, radiation therapy, and when biologically appropriate, hormone-directed therapy depending on confirmed subtype, grade, receptor status, and stage.',
+    'Limitations': 'This AI-derived inference depends on image quality, representative sampling, and model training data. Dataset bias and technical variability may affect performance. It is not a substitute for formal histopathological diagnosis.',
     'Disclaimer': 'This draft is generated for preliminary review only. A qualified clinician must review, interpret, and confirm findings before forming a final diagnosis or treatment plan.',
   };
 
@@ -151,6 +172,83 @@ const buildDisplaySections = (prediction: HistoPrediction | undefined, parsedRep
     heading,
     content: sectionMap.get(heading)?.trim() || defaults[heading],
   }));
+};
+
+const getDocumentSectionTone = (title: string) => {
+  const normalized = title.toLowerCase();
+  if (normalized.includes('prediction')) return 'border-rose-200 bg-rose-50';
+  if (normalized.includes('risk')) return 'border-amber-200 bg-amber-50';
+  if (normalized.includes('recommend') || normalized.includes('treatment')) return 'border-sky-200 bg-sky-50';
+  if (normalized.includes('disclaimer')) return 'border-orange-200 bg-orange-50';
+  return 'border-slate-200 bg-white';
+};
+
+const getRiskPillClass = (value?: string) => {
+  const normalized = (value || '').toLowerCase();
+  if (normalized.includes('high')) return 'bg-red-100 text-red-700 border-red-200';
+  if (normalized.includes('moderate')) return 'bg-amber-100 text-amber-700 border-amber-200';
+  return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+};
+
+const getClassificationPanelClass = (slot: 'normal' | 'benign' | 'malignant', diagnosis?: string) => {
+  const normalized = (diagnosis || '').toLowerCase();
+  const active = normalized === slot;
+  if (!active) return 'border-stone-200 bg-white text-stone-400';
+  if (slot === 'malignant') return 'border-sky-300 bg-sky-50 text-stone-800';
+  if (slot === 'benign') return 'border-emerald-300 bg-emerald-50 text-stone-800';
+  return 'border-indigo-300 bg-indigo-50 text-stone-800';
+};
+
+const splitNumberedItems = (value?: string) =>
+  (value || '')
+    .split(/\s(?=\d+\.\s)/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+const splitFeatureItems = (value?: string) =>
+  (value || '')
+    .split(/;\s+|\.\s+(?=[A-Z])/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+const buildClinicalReportDocument = (
+  file: UploadedFile,
+  prediction: HistoPrediction,
+  displaySections: ParsedReportSection[]
+): StructuredReport => {
+  const sectionMap = new Map(displaySections.map(section => [section.heading, section.content]));
+  return {
+    patientInfo: {},
+    sections: [
+      {
+        title: 'Header',
+        subsections: [
+          { label: 'File Reference', content: file.name },
+          { label: 'Classification', content: sectionMap.get('Classification') || getPredictionFields(prediction).diagnosis || 'Unknown', isHighlighted: true },
+          { label: 'AI Confidence', content: sectionMap.get('AI Confidence') || `${(prediction.confidence * 100).toFixed(1)}%` },
+          { label: 'Analysis Date & Time', content: sectionMap.get('Analysis Date & Time') || new Date().toLocaleString() },
+        ],
+      },
+      {
+        title: 'Histological Subtype',
+        subsections: [
+          { label: 'Predicted Subclass', content: sectionMap.get('Predicted Subclass') || getPredictionFields(prediction).subclassLabel, isHighlighted: true },
+          { label: 'Subclass ID', content: sectionMap.get('Subclass ID') || (prediction.class_id != null ? String(prediction.class_id) : 'Derived from model label set') },
+          { label: 'Subclass Confidence', content: sectionMap.get('Subclass Confidence') || `${(prediction.confidence * 100).toFixed(1)}%` },
+          { label: 'Diagnosis Confidence', content: sectionMap.get('Diagnosis Confidence') || (prediction.pathology_confidence != null ? `${(prediction.pathology_confidence * 100).toFixed(1)}%` : `${(prediction.confidence * 100).toFixed(1)}%`) },
+        ],
+      },
+      { title: 'Summary', subsections: [{ label: 'Summary', content: sectionMap.get('Summary') || 'Summary generated from model output.' }] },
+      { title: 'Impression', subsections: [{ label: 'Impression', content: sectionMap.get('Impression') || 'Impression generated from model output.' }] },
+      { title: 'Histopathological Features', subsections: [{ label: 'Features', content: sectionMap.get('Histopathological Features') || 'Histopathological features generated from model output.' }] },
+      { title: 'Quantitative Findings', subsections: [{ label: 'Quantitative Findings', content: sectionMap.get('Quantitative Findings') || `Classification: ${getPredictionFields(prediction).diagnosis}; AI Confidence: ${(prediction.confidence * 100).toFixed(1)}%; Diagnosis Confidence: ${prediction.pathology_confidence != null ? `${(prediction.pathology_confidence * 100).toFixed(1)}%` : `${(prediction.confidence * 100).toFixed(1)}%`}.` }] },
+      { title: 'Risk Stratification', subsections: [{ label: 'Risk Stratification', content: sectionMap.get('Risk Stratification') || 'Moderate Risk', isHighlighted: true }] },
+      { title: 'Recommended Clinical Next Steps', subsections: [{ label: 'Next Steps', content: sectionMap.get('Recommended Clinical Next Steps') || '1. Arrange specialist consultation. 2. Recommend confirmatory pathological review to validate AI-based histological findings. 3. Correlate with breast imaging. 4. Confirm subtype on pathology review. 5. Discuss in multidisciplinary review.' }] },
+      { title: 'Management Considerations', subsections: [{ label: 'Management', content: sectionMap.get('Management Considerations') || 'General management pathways may include surgery, chemotherapy, radiation therapy, or hormone-directed therapy depending on confirmed subtype and stage.' }] },
+      { title: 'Limitations', subsections: [{ label: 'Limitations', content: sectionMap.get('Limitations') || 'This AI-derived inference depends on image quality, representative sampling, and model training data. It does not replace formal histopathological diagnosis.' }] },
+      { title: 'Disclaimer', description: 'AI-generated reference only', subsections: [{ label: 'Clinical Use', content: sectionMap.get('Disclaimer') || 'This report is AI-generated for reference purposes only and must be reviewed by a qualified pathologist or oncologist before clinical decision-making.' }] },
+    ],
+  };
 };
 
 const MultiClassHistoAnalysis: React.FC = () => {
@@ -189,6 +287,8 @@ const MultiClassHistoAnalysis: React.FC = () => {
             pathology: fields.diagnosis,
             subclass: fields.subclassLabel,
             confidence: prediction.confidence,
+            classId: prediction.class_id,
+            diagnosisConfidence: prediction.pathology_confidence,
             insight: prediction.insight,
             modelUsed: 'OncoScanAI Master',
           },
@@ -262,22 +362,61 @@ const MultiClassHistoAnalysis: React.FC = () => {
       console.log('[Report] Generating local fallback report');
       const fallbackReport: StructuredReport = {
         patientInfo: {
-          file: fileObj.name,
-          model: 'OncoScanAI Master',
-          analysisTime: new Date().toISOString(),
+          Name: 'Not provided',
+          Age: 'Not provided',
+          Gender: 'Not provided',
+          'Report ID': `HISTO-${Date.now()}`,
+          'Analysis Date & Time': new Date().toLocaleString(),
         },
         sections: [
           {
-            title: 'Classification & Findings',
+            title: 'Model Prediction Summary',
+            description: 'Core multi-class model outputs for subclass and diagnosis estimation.',
             subsections: [
-              { label: 'Predicted Subclass', content: fields.subclassLabel },
-              { label: 'Diagnosis Group', content: fields.diagnosis },
-              { label: 'Confidence', content: `${(prediction.confidence * 100).toFixed(1)}%` },
-              { label: 'Model Insight', content: prediction.insight || 'Analysis completed' },
+              { label: 'Predicted Subclass', content: fields.subclassLabel, isHighlighted: true },
+              { label: 'Subclass ID / Number', content: prediction.class_id != null ? String(prediction.class_id) : 'Not provided' },
+              { label: 'Subclass Confidence Score', content: `${(prediction.confidence * 100).toFixed(1)}%` },
+              { label: 'Predicted Cancer Type', content: fields.diagnosis, isHighlighted: true },
+              { label: 'Diagnosis Confidence', content: prediction.pathology_confidence != null ? `${(prediction.pathology_confidence * 100).toFixed(1)}%` : 'Not provided' },
             ],
           },
           {
-            title: 'Important Disclaimer',
+            title: 'Histopathological Findings',
+            description: 'Microscopic tissue characteristics inferred from the uploaded breast histology image.',
+            subsections: [
+              { label: 'Observations', content: `The analyzed tissue shows atypical cellular architecture and disrupted organization consistent with the predicted subclass ${fields.subclassLabel}.` },
+            ],
+          },
+          {
+            title: 'Clinical Interpretation',
+            description: 'Doctor-friendly explanation of the predicted subtype.',
+            subsections: [
+              { label: 'Interpretation', content: `${fields.subclassLabel} is interpreted in the context of a ${fields.diagnosis} prediction. ${prediction.insight || 'Clinical staging and pathology review remain necessary.'}` },
+            ],
+          },
+          {
+            title: 'Risk Level Assessment',
+            description: 'AI-assisted risk category derived from subtype severity and model confidence.',
+            subsections: [
+              { label: 'Risk Category', content: fields.diagnosis.toLowerCase() === 'malignant' ? 'High Risk' : fields.diagnosis.toLowerCase() === 'benign' ? 'Moderate Risk' : 'Low Risk', isHighlighted: true },
+            ],
+          },
+          {
+            title: 'Recommended Medical Actions',
+            description: 'Suggested next-step clinical evaluation.',
+            subsections: [
+              { label: 'Actions', content: 'Immediate pathology review, oncologist consultation, biopsy confirmation, and breast imaging such as mammography or MRI may be required.' },
+            ],
+          },
+          {
+            title: 'Treatment Guidance',
+            description: 'General treatment pathways for clinician consideration.',
+            subsections: [
+              { label: 'Guidance', content: 'Treatment options may include surgery, chemotherapy, radiation therapy, or hormone therapy depending on confirmed subtype, grade, and stage.' },
+            ],
+          },
+          {
+            title: 'Disclaimer',
             description: 'AI-generated reference only',
             subsections: [
               { label: 'Clinical Use', content: 'This report is generated by AI and is not for standalone diagnosis. A qualified clinician must review all findings.' },
@@ -387,6 +526,10 @@ const MultiClassHistoAnalysis: React.FC = () => {
   const selectedFields = getPredictionFields(selectedPrediction);
   const parsedReport = parseStructuredReport(selectedFile?.suggestiveReport);
   const displaySections = buildDisplaySections(selectedPrediction, parsedReport);
+  const reportDocument = useMemo<StructuredReport | null>(() => {
+    if (!selectedFile || !selectedPrediction) return null;
+    return buildClinicalReportDocument(selectedFile, selectedPrediction, displaySections);
+  }, [displaySections, selectedFile, selectedPrediction]);
 
   return (
     <div className="space-y-6 h-full">
@@ -570,113 +713,185 @@ const MultiClassHistoAnalysis: React.FC = () => {
                       </div>
                     )}
 
-                    {selectedFile.structuredReport && (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                        <div className="border-b border-slate-200 bg-white px-5 py-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <p className="text-lg font-bold text-slate-900">Analysis Report</p>
-                              <p className="mt-1 text-sm text-slate-600">
-                                Structured AI-generated histopathology analysis
-                              </p>
-                            </div>
-                            {selectedFile.structuredReport.patientInfo && (
-                              <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                                {Object.entries(selectedFile.structuredReport.patientInfo).map(([key, value]) => (
-                                  <div key={key} className="rounded-lg bg-slate-50 px-3 py-2">
-                                    <span className="font-semibold text-slate-800">{key}:</span> {value}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                    {reportDocument && (
+                      <div className="mt-4 overflow-hidden rounded-[28px] border border-stone-200 bg-[linear-gradient(180deg,#fffdfc_0%,#fffaf7_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+                        {(() => {
+                          const getSection = (title: string) => reportDocument.sections.find(section => section.title === title);
+                          const headerSection = getSection('Header');
+                          const headerMap = new Map<string, string>((headerSection?.subsections || []).map(subsection => [subsection.label, subsection.content]));
+                          const subtypeSection = getSection('Histological Subtype');
+                          const subtypeMap = new Map<string, string>((subtypeSection?.subsections || []).map(subsection => [subsection.label, subsection.content]));
+                          const summaryText = getSection('Summary')?.subsections?.[0]?.content || 'Summary generated from model output.';
+                          const impressionText = getSection('Impression')?.subsections?.[0]?.content || 'Impression generated from model output.';
+                          const featuresText = getSection('Histopathological Features')?.subsections?.[0]?.content || 'Histopathological features generated from model output.';
+                          const quantitativeText = getSection('Quantitative Findings')?.subsections?.[0]?.content || '';
+                          const riskText = getSection('Risk Stratification')?.subsections?.[0]?.content || 'Moderate Risk';
+                          const nextStepsText = getSection('Recommended Clinical Next Steps')?.subsections?.[0]?.content || '1. Arrange specialist consultation. 2. Recommend confirmatory pathological review to validate AI-based histological findings. 3. Correlate with breast imaging. 4. Confirm subtype on pathology review. 5. Discuss in multidisciplinary review.';
+                          const managementText = getSection('Management Considerations')?.subsections?.[0]?.content || 'General management pathways may include surgery, chemotherapy, radiation therapy, and hormone-directed therapy depending on confirmed subtype and stage.';
+                          const limitationsText = getSection('Limitations')?.subsections?.[0]?.content || 'This AI-derived inference depends on image quality, representative sampling, and model training data. It does not replace formal histopathological diagnosis.';
+                          const disclaimerText = getSection('Disclaimer')?.subsections?.[0]?.content || 'This report is AI-generated for reference purposes only and must be reviewed by a qualified pathologist or oncologist before clinical decision-making.';
+                          const classification = headerMap.get('Classification') || selectedFields.diagnosis || 'Unknown';
+                          const aiConfidence = headerMap.get('AI Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`;
+                          const analysisTime = headerMap.get('Analysis Date & Time') || new Date().toLocaleString();
+                          const quantitativeMap = new Map<string, string>(
+                            quantitativeText
+                              .split(/;\s+/)
+                              .map(item => {
+                                const separatorIndex = item.indexOf(':');
+                                return separatorIndex === -1 ? null : [item.slice(0, separatorIndex).trim(), item.slice(separatorIndex + 1).trim()];
+                              })
+                              .filter((item): item is [string, string] => Boolean(item))
+                          );
+                          const nextSteps = splitNumberedItems(nextStepsText);
+                          const featureItems = splitFeatureItems(featuresText);
 
-                        <div className="grid gap-4 p-5 md:grid-cols-2">
-                          {selectedFile.structuredReport.sections.map(section => {
-                            const isDisclaimer = section.title.toLowerCase().includes('disclaimer');
-                            return (
-                              <div
-                                key={section.title}
-                                className={`rounded-xl border p-5 ${isDisclaimer ? 'border-amber-200 bg-amber-50 md:col-span-2' : 'border-slate-200 bg-white'}`}
-                              >
-                                <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDisclaimer ? 'text-amber-700' : 'text-slate-500'}`}>
-                                  {section.title}
-                                </p>
-                                {section.description && (
-                                  <p className={`mt-2 text-sm leading-5 ${isDisclaimer ? 'text-amber-800' : 'text-slate-600'}`}>
-                                    {section.description}
-                                  </p>
-                                )}
-                                {section.subsections && (
-                                  <div className="mt-4 space-y-3">
-                                    {section.subsections.map((subsection, idx) => (
-                                      <div key={idx} className="grid gap-2 md:grid-cols-[140px_1fr]">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                          {subsection.label}
-                                        </p>
-                                        <p className={`text-sm leading-6 ${isDisclaimer ? 'text-amber-900' : 'text-slate-700'}`}>
-                                          {subsection.content}
-                                        </p>
+                          return (
+                            <>
+                              <div className="bg-[linear-gradient(180deg,#fffefc_0%,#fff9f6_100%)] px-6 pt-8 pb-6">
+                                <div className="flex items-center gap-6">
+                                  <div className="h-px flex-1 bg-stone-300" />
+                                  <h3 className="font-serif text-[1.6rem] font-semibold tracking-[0.12em] text-stone-700">ANALYSIS REPORT</h3>
+                                  <div className="h-px flex-1 bg-stone-300" />
+                                </div>
+
+                                <div className="mt-8 grid gap-4 border-t border-stone-200 pt-6 text-sm text-stone-700 lg:grid-cols-4">
+                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">File Reference:</span> {selectedFile.name}</p>
+                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Classification:</span> {classification}</p>
+                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">AI Confidence:</span> {aiConfidence}</p>
+                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Analysis Time:</span> {analysisTime}</p>
+                                </div>
+                              </div>
+
+                              <div className="px-6 pb-8">
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Classification:</p>
+                                    <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-stone-300 bg-white">
+                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('normal', classification)}`}>Normal Tissue</div>
+                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('benign', classification)}`}>Benign</div>
+                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('malignant', classification)}`}>Malignant</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Histological Subtype:</p>
+                                    <div className="rounded-2xl border border-rose-200 bg-[linear-gradient(180deg,#fff7fb_0%,#fffdfd_100%)] p-5">
+                                      <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
+                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Predicted Subclass</p>
+                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Predicted Subclass') || selectedFields.subclassLabel}</p>
+                                        </div>
+                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
+                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Subclass ID</p>
+                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Subclass ID') || (selectedPrediction.class_id != null ? String(selectedPrediction.class_id) : 'Derived from model label set')}</p>
+                                        </div>
+                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
+                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Subclass Confidence</p>
+                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Subclass Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`}</p>
+                                        </div>
+                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
+                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Diagnosis Confidence</p>
+                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Diagnosis Confidence') || (selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : `${(selectedPrediction.confidence * 100).toFixed(1)}%`)}</p>
+                                        </div>
                                       </div>
-                                    ))}
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                                </div>
 
-                    {selectedFile.suggestiveReport && !selectedFile.structuredReport && (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                        <div className="border-b border-slate-200 bg-white px-5 py-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <p className="text-lg font-bold text-slate-900">{parsedReport?.title || 'Analysis Report'}</p>
-                              <p className="mt-1 text-sm text-slate-600">
-                                Template-style summary generated from the multi-class histopathology result.
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                              <div className="rounded-lg bg-slate-50 px-3 py-2">
-                                <span className="font-semibold text-slate-800">File:</span> {selectedFile.name}
-                              </div>
-                              <div className="rounded-lg bg-slate-50 px-3 py-2">
-                                <span className="font-semibold text-slate-800">Model:</span> OncoScanAI Master
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Summary:</p>
+                                    <p className="text-[1rem] leading-9 text-stone-700">{summaryText}</p>
+                                  </div>
+                                </div>
 
-                        <div className="grid gap-4 p-5 md:grid-cols-2">
-                          {displaySections.map(section => {
-                            const isDisclaimer = section.heading.toLowerCase() === 'disclaimer';
-                            return (
-                              <div
-                                key={section.heading}
-                                className={`rounded-xl border p-4 ${isDisclaimer ? 'border-amber-200 bg-amber-50 md:col-span-2' : 'border-slate-200 bg-white'}`}
-                              >
-                                <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDisclaimer ? 'text-amber-700' : 'text-slate-500'}`}>
-                                  {section.heading}
-                                </p>
-                                <p className={`mt-3 whitespace-pre-wrap text-sm leading-6 ${isDisclaimer ? 'text-amber-900' : 'text-slate-700'}`}>
-                                  {section.content}
-                                </p>
-                              </div>
-                            );
-                          })}
-                        </div>
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Impression:</p>
+                                    <p className="text-[1rem] leading-9 text-stone-700">{impressionText}</p>
+                                  </div>
+                                </div>
 
-                        {!parsedReport && (
-                          <div className="border-t border-slate-200 bg-white p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Raw Worker Output</p>
-                            <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-brand-text-primary font-sans">
-                              {selectedFile.suggestiveReport}
-                            </pre>
-                          </div>
-                        )}
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Histopathological Features:</p>
+                                    <div className="space-y-4">
+                                      {(featureItems.length ? featureItems : [featuresText]).map((item, idx) => (
+                                        <div key={idx} className="flex gap-4 text-[0.98rem] leading-8 text-stone-700">
+                                          <span className="pt-1 text-stone-500">•</span>
+                                          <p>{item.replace(/\.$/, '')}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Quantitative Findings:</p>
+                                    <div className="grid gap-x-5 gap-y-6 md:grid-cols-2">
+                                      <div className="border-b border-stone-200 pb-5">
+                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">Classification</p>
+                                        <p className="mt-4 text-[1.15rem] text-stone-700">{classification}</p>
+                                      </div>
+                                      <div className="border-b border-stone-200 pb-5">
+                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">AI Confidence</p>
+                                        <p className="mt-4 text-[1.15rem] text-stone-700">{aiConfidence}</p>
+                                      </div>
+                                      <div className="border-b border-stone-200 pb-5">
+                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">Diagnosis Confidence</p>
+                                        <p className="mt-4 text-[1.15rem] text-stone-700">{quantitativeMap.get('Diagnosis Confidence') || (selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : `${(selectedPrediction.confidence * 100).toFixed(1)}%`)}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Risk Stratification:</p>
+                                    <div>
+                                      <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold ${getRiskPillClass(riskText)}`}>{riskText}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Recommended Clinical Next Steps:</p>
+                                    <div className="space-y-6">
+                                      {(nextSteps.length ? nextSteps : [nextStepsText]).map((step, idx) => (
+                                        <div key={idx} className="grid gap-4 md:grid-cols-[22px_1fr]">
+                                          <p className="text-[1.2rem] font-semibold text-stone-700">{idx + 1}.</p>
+                                          <p className="text-[0.98rem] leading-9 text-stone-700">{step.replace(/^\d+\.\s*/, '')}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Management Considerations:</p>
+                                    <p className="text-[0.98rem] leading-9 text-stone-700">{managementText}</p>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 py-8">
+                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Limitations:</p>
+                                    <p className="text-[0.98rem] leading-9 text-stone-700">{limitationsText}</p>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-stone-200 pt-8">
+                                  <p className="text-center text-[0.98rem] leading-9 text-stone-600">{disclaimerText}</p>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
 

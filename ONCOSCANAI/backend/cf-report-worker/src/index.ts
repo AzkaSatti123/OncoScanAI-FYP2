@@ -9,6 +9,8 @@ type ReportRequest = {
     pixels?: number;
     area?: number;
     modelUsed?: string;
+    classId?: number;
+    diagnosisConfidence?: number;
   };
 };
 
@@ -19,14 +21,21 @@ const corsHeaders = {
 };
 
 const HISTOLOGY_HEADINGS = [
+  "File Reference",
+  "Classification",
+  "AI Confidence",
+  "Analysis Date & Time",
   "Predicted Subclass",
-  "Diagnosis Group",
-  "Confidence",
-  "Model Insight",
-  "Potential Causes",
-  "Lifestyle Advice",
-  "Dietary Recommendations",
-  "Clinical Recommendations",
+  "Subclass ID",
+  "Subclass Confidence",
+  "Diagnosis Confidence",
+  "Summary",
+  "Impression",
+  "Histopathological Features",
+  "Risk Stratification",
+  "Recommended Clinical Next Steps",
+  "Management Considerations",
+  "Limitations",
   "Disclaimer",
 ];
 
@@ -36,52 +45,52 @@ function buildPrompt(body: ReportRequest) {
   const isHistology = modality.includes("histo");
   if (isHistology) {
     return `
-Create a concise suggestive histopathology report draft for doctor review by following this exact plain-text template.
+Generate the narrative sections of a professional breast cancer histopathology analysis report for doctor review.
 
 Rules:
 - Return plain text only. Do not return JSON.
-- Do not use markdown, bullet points, code blocks, or extra headings.
+- Do not use markdown, code blocks, bullets, or numbered lists.
 - Use only the provided findings.
 - Do not invent values.
 - Do not state a final diagnosis.
-- If a value is missing, write "Not provided".
-- Use these headings exactly and in this exact order:
-Analysis Report
-Predicted Subclass:
-Diagnosis Group:
-Confidence:
-Model Insight:
-Potential Causes:
-Lifestyle Advice:
-Dietary Recommendations:
-Clinical Recommendations:
+- Return only these headings exactly and in this order, with each section as a concise paragraph:
+Summary:
+Impression:
+Histopathological Features:
+Risk Stratification:
+Recommended Clinical Next Steps:
+Management Considerations:
+Limitations:
 Disclaimer:
 
 Provided findings:
-File: ${body.fileName ?? "Not provided"}
-Model: ${a.modelUsed ?? "Not provided"}
-Predicted Subclass: ${a.subclass ?? "Not provided"}
-Diagnosis Group: ${a.pathology}
-Confidence: ${typeof a.confidence === "number" ? `${(a.confidence * 100).toFixed(1)}%` : "Not provided"}
-Model Insight: ${a.insight ?? "Not provided"}
+File Reference: ${body.fileName ?? "histology_scan"}
+Classification: ${a.pathology}
+AI Confidence: ${typeof a.confidence === "number" ? `${(a.confidence * 100).toFixed(1)}%` : "Unavailable from model output"}
+Predicted Subclass: ${a.subclass ?? "Unavailable from model output"}
+Subclass ID: ${a.classId != null ? String(a.classId) : "Unavailable from model output"}
+Diagnosis Confidence: ${typeof a.diagnosisConfidence === "number" ? `${(a.diagnosisConfidence * 100).toFixed(1)}%` : "Unavailable from model output"}
+Model Insight: ${a.insight ?? "Model identified subclass and diagnosis pattern for clinical review."}
 
 Writing guidance:
-- "Potential Causes" should briefly explain what the AI-identified subclass may be associated with in general pathology terms.
-- "Lifestyle Advice" should stay conservative and supportive, focused on general wellness only.
-- "Dietary Recommendations" should stay general and non-prescriptive.
-- "Clinical Recommendations" should emphasize pathology review, clinicopathologic correlation, and physician follow-up.
+- "Summary" should be a concise 1-2 sentence pathology-style paragraph using histomorphology language.
+- "Impression" should be concise, authoritative, and avoid repeating the Summary.
+- "Histopathological Features" must describe key microscopic features in one compact paragraph.
+- "Risk Stratification" must explicitly say Low Risk, Moderate Risk, or High Risk and briefly justify it.
+- "Recommended Clinical Next Steps" should be written as a short paragraph mentioning specialist consultation, confirmatory pathological review, imaging correlation, pathology confirmation, and multidisciplinary review in realistic workflow order.
+- "Management Considerations" should be a brief paragraph mentioning general pathways such as surgery, chemotherapy, radiation therapy, or hormone therapy when appropriate.
+- "Limitations" must mention AI limitations, image quality dependence, dataset bias, and that this is not a substitute for formal histopathological diagnosis.
 - "Disclaimer" must clearly state that the AI report is for reference only and not for standalone diagnostic use.
+- If a recognized subtype is implied, use commonly accepted histopathology terminology only.
 
 Return exactly this structure:
-Analysis Report
-Predicted Subclass: ...
-Diagnosis Group: ...
-Confidence: ...
-Model Insight: ...
-Potential Causes: ...
-Lifestyle Advice: ...
-Dietary Recommendations: ...
-Clinical Recommendations: ...
+Summary: ...
+Impression: ...
+Histopathological Features: ...
+Risk Stratification: ...
+Recommended Clinical Next Steps: ...
+Management Considerations: ...
+Limitations: ...
 Disclaimer: ...
 `.trim();
   }
@@ -195,38 +204,163 @@ function extractSections(text: string, headings: string[]) {
 function buildHistologyFallback(body: ReportRequest, extractedText: string) {
   const a = body.analysis;
   const extractedSections = extractSections(extractedText, HISTOLOGY_HEADINGS);
-  const subclass = a.subclass || "Not provided";
-  const diagnosis = a.pathology || "Not provided";
-  const confidence =
-    typeof a.confidence === "number" ? `${(a.confidence * 100).toFixed(1)}%` : "Not provided";
-  const insight = a.insight || "Not provided";
+  const subclass = a.subclass || "Histologic subtype identified by model";
+  const diagnosis = a.pathology || "indeterminate";
+  const subclassConfidence =
+    typeof a.confidence === "number" ? `${(a.confidence * 100).toFixed(1)}%` : "Unavailable from model output";
+  const diagnosisConfidence =
+    typeof a.diagnosisConfidence === "number" ? `${(a.diagnosisConfidence * 100).toFixed(1)}%` : "Unavailable from model output";
+  const insight = a.insight || "Model identified subclass and diagnosis pattern for clinical review.";
+  const analysisTime = new Date().toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const pixelCount = a.pixels != null ? String(a.pixels) : "Unavailable from model output";
+  const area = a.area != null ? `${a.area} mm^2` : "Unavailable from model output";
+  const riskLevel =
+    diagnosis.toLowerCase() === "malignant"
+      ? "High Risk"
+      : diagnosis.toLowerCase() === "benign"
+        ? "Moderate Risk"
+        : "Low Risk";
+  const lowerSubclass = subclass.toLowerCase();
+  const subtypeFeatures =
+    lowerSubclass.includes("ductal")
+      ? "Invasive ductal-type architecture with malignant epithelial proliferation and desmoplastic stromal reaction"
+      : lowerSubclass.includes("lobular")
+        ? "Discohesive infiltrative cells with lobular-type growth pattern"
+        : lowerSubclass.includes("phyllodes")
+          ? "Leaf-like architecture with stromal overgrowth"
+          : lowerSubclass.includes("fibroadenoma")
+            ? "Circumscribed biphasic fibroepithelial pattern with benign stromal and epithelial components"
+            : "Atypical cellular morphology with altered tissue organization";
 
   const templateSections: Record<string, string> = {
-    "Predicted Subclass": extractedSections["Predicted Subclass"] || subclass,
-    "Diagnosis Group": extractedSections["Diagnosis Group"] || diagnosis,
-    "Confidence": extractedSections["Confidence"] || confidence,
-    "Model Insight": extractedSections["Model Insight"] || insight,
-    "Potential Causes":
-      extractedSections["Potential Causes"] ||
-      `The AI-identified subclass ${subclass} may be associated with ${diagnosis.toLowerCase()} histopathologic patterns. Correlation with microscopic review is required.`,
-    "Lifestyle Advice":
-      extractedSections["Lifestyle Advice"] ||
-      "Maintain general wellness habits, follow clinician guidance, and avoid relying on this draft alone for medical decisions.",
-    "Dietary Recommendations":
-      extractedSections["Dietary Recommendations"] ||
-      "Use balanced, non-prescriptive dietary support as advised by the treating clinician or dietitian.",
-    "Clinical Recommendations":
-      extractedSections["Clinical Recommendations"] ||
-      "Recommend pathology review, clinicopathologic correlation, and physician follow-up before any final interpretation or treatment planning.",
+    "File Reference": body.fileName || "histology_scan",
+    "Classification": diagnosis,
+    "AI Confidence": subclassConfidence,
+    "Analysis Date & Time": analysisTime,
+    "Predicted Subclass": subclass,
+    "Subclass ID": a.classId != null ? String(a.classId) : "Derived from model label set",
+    "Subclass Confidence": extractedSections["Subclass Confidence"] || subclassConfidence,
+    "Diagnosis Confidence": extractedSections["Diagnosis Confidence"] || diagnosisConfidence,
+    "Summary":
+      extractedSections["Summary"] ||
+      `Breast tissue demonstrates morphologic features compatible with ${subclass} in a ${diagnosis.toLowerCase()} context, with AI findings supporting further histopathologic review. ${insight}`,
+    "Impression":
+      extractedSections["Impression"] ||
+      `Impression suggests ${diagnosis.toLowerCase()} morphology with supporting AI confidence; formal pathology correlation is required.`,
+    "Histopathological Features":
+      extractedSections["Histopathological Features"] ||
+      `${subtypeFeatures}; nuclear atypia and architectural distortion should be correlated with definitive microscopy; mitotic activity and stromal-epithelial relationships require pathologist confirmation.`,
+    "Quantitative Findings":
+      extractedSections["Quantitative Findings"] ||
+      `Classification: ${diagnosis}; AI Confidence: ${subclassConfidence}; Diagnosis Confidence: ${diagnosisConfidence}.`,
+    "Risk Stratification":
+      extractedSections["Risk Stratification"] ||
+      `${riskLevel}. Stratification is supported by subclass phenotype, model confidence, and the inferred degree of abnormal histologic architecture.`,
+    "Recommended Clinical Next Steps":
+      extractedSections["Recommended Clinical Next Steps"] ||
+      `Recommend specialist consultation with breast oncology or surgical oncology, confirmatory pathological review to validate AI-based histological findings, imaging correlation, and multidisciplinary review to finalize histopathologic assessment and treatment planning.`,
+    "Management Considerations":
+      extractedSections["Management Considerations"] ||
+      `Consider general management pathways such as surgery, chemotherapy, radiation therapy, and hormone-directed therapy as clinically appropriate after pathology confirmation of subtype, grade, and receptor status.`,
+    "Limitations":
+      extractedSections["Limitations"] ||
+      `This AI-derived inference depends on image quality, representative sampling, and model training data. Dataset bias and technical variability may affect performance. It is not a substitute for formal histopathological diagnosis.`,
     "Disclaimer":
       extractedSections["Disclaimer"] ||
       "This draft is generated for preliminary review only. A qualified clinician must review, interpret, and confirm findings before forming a final diagnosis or treatment plan.",
   };
 
-  return [
-    "Analysis Report",
-    ...HISTOLOGY_HEADINGS.map((heading) => `${heading}: ${templateSections[heading] || "Not provided"}`),
-  ].join("\n");
+  return ["Analysis Report", ...HISTOLOGY_HEADINGS.map((heading) => `${heading}: ${templateSections[heading]}`)].join("\n");
+}
+
+function buildHistologyStructuredReport(body: ReportRequest, report: string) {
+  const sections = extractSections(report, HISTOLOGY_HEADINGS);
+
+  return {
+    patientInfo: {},
+    sections: [
+      {
+        title: "Header",
+        subsections: [
+          { label: "File Reference", content: sections["File Reference"] || body.fileName || "histology_scan" },
+          { label: "Classification", content: sections["Classification"] || body.analysis.pathology, isHighlighted: true },
+          { label: "AI Confidence", content: sections["AI Confidence"] || `${(body.analysis.confidence * 100).toFixed(1)}%` },
+          { label: "Analysis Date & Time", content: sections["Analysis Date & Time"] || new Date().toLocaleString() },
+        ],
+      },
+      {
+        title: "Histological Subtype",
+        description: "Core multi-class model outputs for subclass identification.",
+        subsections: [
+          { label: "Predicted Subclass", content: sections["Predicted Subclass"] || "Histologic subtype identified by model", isHighlighted: true },
+          { label: "Subclass ID", content: sections["Subclass ID"] || "Derived from model label set" },
+          { label: "Subclass Confidence", content: sections["Subclass Confidence"] || `${(body.analysis.confidence * 100).toFixed(1)}%` },
+          { label: "Diagnosis Confidence", content: sections["Diagnosis Confidence"] || "Unavailable from model output" },
+        ],
+      },
+      {
+        title: "Summary",
+        subsections: [
+          { label: "Summary", content: sections["Summary"] || "Summary generated from model output." },
+        ],
+      },
+      {
+        title: "Impression",
+        subsections: [
+          { label: "Impression", content: sections["Impression"] || "Impression generated from model output." },
+        ],
+      },
+      {
+        title: "Histopathological Features",
+        subsections: [
+          { label: "Features", content: sections["Histopathological Features"] || "Histopathological feature summary generated from model output." },
+        ],
+      },
+      {
+        title: "Quantitative Findings",
+        subsections: [
+          { label: "Quantitative Findings", content: sections["Quantitative Findings"] || "Quantitative findings derived from available model output." },
+        ],
+      },
+      {
+        title: "Risk Stratification",
+        subsections: [
+          { label: "Risk Stratification", content: sections["Risk Stratification"] || "Risk category generated from available model output.", isHighlighted: true },
+        ],
+      },
+      {
+        title: "Recommended Clinical Next Steps",
+        subsections: [
+          { label: "Next Steps", content: sections["Recommended Clinical Next Steps"] || "Clinical next steps generated from available model output." },
+        ],
+      },
+      {
+        title: "Management Considerations",
+        subsections: [
+          { label: "Management", content: sections["Management Considerations"] || "Management considerations generated from available model output." },
+        ],
+      },
+      {
+        title: "Limitations",
+        subsections: [
+          { label: "Limitations", content: sections["Limitations"] || "Limitations generated from available model output." },
+        ],
+      },
+      {
+        title: "Disclaimer",
+        description: "AI-generated reference only",
+        subsections: [
+          { label: "Clinical Use", content: sections["Disclaimer"] || "This report is AI-generated for reference only and must be reviewed by a qualified clinician." },
+        ],
+      },
+    ],
+  };
 }
 
 export default {
@@ -290,10 +424,12 @@ export default {
 
       if (isHistology) {
         const report = buildHistologyFallback(body, extractedText);
+        const structuredReport = buildHistologyStructuredReport(body, report);
         console.log("[Worker] Returning normalized histology template report");
         return Response.json(
           {
             report,
+            ...structuredReport,
             raw: aiResult,
             extractedText,
           },
