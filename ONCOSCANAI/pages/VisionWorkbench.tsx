@@ -483,8 +483,90 @@ const VisionWorkbench: React.FC = () => {
 
             {/* Content */}
             {selectedFile.status === 'Complete' && selectedFile.analysis ? (
-              /* ── THE REPORT IS THE ONLY OUTPUT ── */
-              <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
+              <div className="space-y-8">
+                {/* ── MODEL RESULT PANEL ── */}
+                <div className="grid md:grid-cols-2 gap-8">
+                  {/* Scan image */}
+                  <div className="relative group">
+                    <div className="aspect-square bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl flex items-center justify-center border-8 border-slate-50">
+                      <img src={selectedFile.previewUrl} className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                      {selectedFile.status === 'Analyzing' && (
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center">
+                          <div className="w-16 h-16 border-4 border-brand-pink border-t-transparent rounded-full animate-spin mb-6" />
+                          <p className="text-white text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Running Neural Pass…</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute top-6 left-6 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest">Diagnostic View</div>
+                  </div>
+
+                  {/* Result cards */}
+                  <div className="flex flex-col space-y-6">
+                    {/* Pathology + confidence */}
+                    <div className={`p-7 rounded-[2rem] border-2 ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-50/50 border-red-100' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-50/50 border-green-100' : 'bg-blue-50/50 border-blue-100'}`}>
+                      <div className="flex items-center justify-between mb-5">
+                        <span className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}>
+                          {selectedFile.analysis.pathology}
+                        </span>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Inference Confidence</p>
+                          <p className="text-3xl font-black text-slate-800 tracking-tighter">{(selectedFile.analysis.confidence * 100).toFixed(1)}%</p>
+                        </div>
+                      </div>
+                      <div className="h-2.5 w-full bg-white rounded-full overflow-hidden shadow-inner">
+                        <div className={`h-full transition-all duration-[1500ms] ease-out ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}
+                          style={{ width: `${selectedFile.analysis.confidence * 100}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Neural insight */}
+                    <div className="p-7 bg-slate-50 rounded-[2rem] border border-slate-200">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-brand-pink/10 flex items-center justify-center">
+                          <InfoIcon className="w-4 h-4 text-brand-pink" />
+                        </div>
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Neural Insight</h4>
+                      </div>
+                      <p className="text-sm text-slate-600 leading-relaxed font-medium italic">"{selectedFile.analysis.insight}"</p>
+                    </div>
+
+                    {/* Engine + confirm */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
+                          <ModelIcon className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Engine</p>
+                          <p className="text-xs font-bold text-slate-700">{selectedFile.analysis.modelUsed} — STABLE-PYTORCH-V2</p>
+                        </div>
+                      </div>
+                      <button className="px-8 py-3 bg-slate-900 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-black transition-all shadow-xl">
+                        Confirm Diagnosis
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── SURGICAL PATHOLOGY REPORT BELOW ── */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
+                    <div className="flex items-center gap-3">
+                      {selectedFile.reportStatus === 'Generating' && (
+                        <span className="text-[10px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating report…</span>
+                      )}
+                      <button
+                        onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
+                        disabled={selectedFile.reportStatus === 'Generating'}
+                        className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
+                        Regenerate Report
+                      </button>
+                    </div>
+                  </div>
+                  <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
+                </div>
+              </div>
 
             ) : selectedFile.status === 'Failed' ? (
               <div className="flex-grow flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 text-center p-12">
