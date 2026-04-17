@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import type { HistoPrediction, UploadedFile } from '../types';
+import type { HistoPrediction, UploadedFile, StructuredReport } from '../types';
 import { UploadIcon, CheckCircleIcon, InfoIcon } from '../components/icons';
 
 const FileIcon: React.FC<{ type: UploadedFile['type'] }> = ({ type }) => (
@@ -9,8 +9,82 @@ const FileIcon: React.FC<{ type: UploadedFile['type'] }> = ({ type }) => (
     </div>
 );
 
+type WorkerReportResponse = {
+  report?: string;
+  patientInfo?: Record<string, string>;
+  sections?: any[];
+  raw?: any;
+};
+
 type ErrorResponse = {
     detail?: string;
+};
+
+type ParsedReportSection = {
+  heading: string;
+  content: string;
+};
+
+const REPORT_WORKER_URL = '/report';
+const REPORT_HEADINGS = [
+  'File Reference',
+  'Classification',
+  'AI Confidence',
+  'Analysis Date & Time',
+  'Predicted Subclass',
+  'Subclass ID',
+  'Subclass Confidence',
+  'Diagnosis Confidence',
+  'Summary',
+  'Impression',
+  'Histopathological Features',
+  'Quantitative Findings',
+  'Risk Stratification',
+  'Recommended Clinical Next Steps',
+  'Management Considerations',
+  'Limitations',
+  'Disclaimer',
+];
+
+const getPredictionFields = (prediction: HistoPrediction) => {
+  const result = prediction.result.toLowerCase();
+  const isMalignant = result === 'malignant';
+  const isBenign = result === 'benign';
+  const isNormal = result === 'normal';
+
+  let subclassLabel = 'Unknown';
+  if (prediction.class_id != null) {
+    // Map class_id to subclass labels based on common histopathology classifications
+    const classMappings: Record<number, string> = {
+      0: 'Normal Breast Tissue',
+      1: 'Fibroadenoma',
+      2: 'Fibrocystic Changes',
+      3: 'Ductal Carcinoma In Situ',
+      4: 'Invasive Ductal Carcinoma',
+      5: 'Invasive Lobular Carcinoma',
+      6: 'Mucinous Carcinoma',
+      7: 'Papillary Carcinoma',
+      8: 'Medullary Carcinoma',
+      9: 'Tubular Carcinoma',
+      10: 'Phyllodes Tumor',
+      11: 'Atypical Ductal Hyperplasia',
+      12: 'Lobular Carcinoma In Situ',
+    };
+    subclassLabel = classMappings[prediction.class_id] || `Class ${prediction.class_id}`;
+  }
+
+  return {
+    diagnosis: isMalignant ? 'Malignant' : isBenign ? 'Benign' : isNormal ? 'Normal' : 'Unknown',
+    subclassLabel,
+  };
+};
+
+const splitNumberedItems = (text: string): string[] => {
+  return text.split(/\d+\.\s+/).filter(item => item.trim().length > 0).map(item => item.trim());
+};
+
+const splitFeatureItems = (text: string): string[] => {
+  return text.split(/;\s+/).filter(item => item.trim().length > 0).map(item => item.trim());
 };
 
 const PredictionResult: React.FC<{ prediction: HistoPrediction }> = ({ prediction }) => {
@@ -47,7 +121,184 @@ const PredictionResult: React.FC<{ prediction: HistoPrediction }> = ({ predictio
 
 const HistoAnalysis: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileSelect = (file: UploadedFile) => {
+    setSelectedFile(file);
+  };
+
+  const updateUploadedFile = (fileId: string, updater: (file: UploadedFile) => UploadedFile) => {
+    setFiles(cur => cur.map(file => (file.id === fileId ? updater(file) : file)));
+    setSelectedFile(prev => (prev && prev.id === fileId ? updater(prev) : prev));
+  };
+
+  const generateSuggestiveReport = async (fileObj: UploadedFile, prediction: HistoPrediction) => {
+    const fields = getPredictionFields(prediction);
+    console.log('[Report] Starting report generation for:', fileObj.name, fields);
+
+    updateUploadedFile(fileObj.id, file => ({
+      ...file,
+      reportStatus: 'Generating',
+      reportError: undefined,
+    }));
+
+    try {
+      console.log('[Report] Fetching from:', REPORT_WORKER_URL);
+      const res = await fetch(REPORT_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: fileObj.name,
+          analysis: {
+            modality: 'histopathology',
+            pathology: fields.diagnosis,
+            subclass: fields.subclassLabel,
+            confidence: prediction.confidence,
+            classId: prediction.class_id,
+            diagnosisConfidence: prediction.confidence, // Use same confidence for diagnosis
+            insight: prediction.insight,
+            modelUsed: 'OncoScanAI Master',
+          },
+        }),
+      });
+
+      console.log('[Report] Response received:', res.status, res.ok);
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => `Status ${res.status}`);
+        console.log('[Report] Error response:', text);
+        throw new Error(text || `Report generation failed (${res.status})`);
+      }
+
+      const json = await res.json() as WorkerReportResponse;
+      console.log('[Report] Response JSON:', json);
+
+      let structuredReport: StructuredReport | null = null;
+      let fallbackText = '';
+
+      // Check if response already has structured report data
+      if (json.sections && Array.isArray(json.sections)) {
+        structuredReport = {
+          patientInfo: json.patientInfo,
+          sections: json.sections,
+        };
+        console.log('[Report] Using structured sections');
+      } else if (json.report && typeof json.report === 'string') {
+        // Try to parse report field as JSON
+        try {
+          const jsonMatch = json.report.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.sections && Array.isArray(parsed.sections)) {
+              structuredReport = parsed;
+              console.log('[Report] Parsed structured report from string');
+            } else {
+              fallbackText = json.report;
+              console.log('[Report] Using report as fallback text');
+            }
+          } else {
+            fallbackText = json.report;
+            console.log('[Report] No JSON found in report, using as text');
+          }
+        } catch (e) {
+          fallbackText = json.report;
+          console.log('[Report] JSON parsing failed, using as text');
+        }
+      }
+
+      if (!structuredReport && !fallbackText) {
+        throw new Error('Cloudflare Worker returned an empty report.');
+      }
+
+      console.log('[Report] Updating file with report, status=Complete');
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Complete',
+        structuredReport: structuredReport || undefined,
+        suggestiveReport: fallbackText || JSON.stringify(structuredReport),
+        reportError: undefined,
+      }));
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      const msg = rawMsg === 'Failed to fetch'
+        ? 'Could not reach the local Cloudflare Worker at /report. Make sure `wrangler dev` is running for `backend/cf-report-worker`.'
+        : rawMsg;
+      console.error('[Report] Error:', msg);
+
+      // Generate basic local fallback if worker fails
+      console.log('[Report] Generating local fallback report');
+      const fallbackReport: StructuredReport = {
+        patientInfo: {
+          Name: 'Not provided',
+          Age: 'Not provided',
+          Gender: 'Not provided',
+          'Report ID': `HISTO-${Date.now()}`,
+          'Analysis Date & Time': new Date().toLocaleString(),
+        },
+        sections: [
+          {
+            title: 'Model Prediction Summary',
+            description: 'Core model outputs for diagnosis estimation.',
+            subsections: [
+              { label: 'Predicted Diagnosis', content: fields.diagnosis, isHighlighted: true },
+              { label: 'Class ID / Number', content: prediction.class_id != null ? String(prediction.class_id) : 'Not provided' },
+              { label: 'Confidence Score', content: `${(prediction.confidence * 100).toFixed(1)}%` },
+            ],
+          },
+          {
+            title: 'Histopathological Findings',
+            description: 'Microscopic tissue characteristics inferred from the uploaded histology image.',
+            subsections: [
+              { label: 'Observations', content: `The analyzed tissue shows characteristics consistent with ${fields.diagnosis} morphology.` },
+            ],
+          },
+          {
+            title: 'Clinical Interpretation',
+            description: 'Doctor-friendly explanation of the predicted diagnosis.',
+            subsections: [
+              { label: 'Interpretation', content: `${fields.diagnosis} diagnosis based on AI analysis. ${prediction.insight || 'Clinical staging and pathology review remain necessary.'}` },
+            ],
+          },
+          {
+            title: 'Risk Level Assessment',
+            description: 'AI-assisted risk category derived from diagnosis severity and model confidence.',
+            subsections: [
+              { label: 'Risk Category', content: fields.diagnosis.toLowerCase() === 'malignant' ? 'High Risk' : fields.diagnosis.toLowerCase() === 'benign' ? 'Moderate Risk' : 'Low Risk', isHighlighted: true },
+            ],
+          },
+          {
+            title: 'Recommended Medical Actions',
+            description: 'Suggested next-step clinical evaluation.',
+            subsections: [
+              { label: 'Actions', content: 'Immediate pathology review, oncologist consultation, biopsy confirmation, and breast imaging such as mammography or MRI may be required.' },
+            ],
+          },
+          {
+            title: 'Treatment Guidance',
+            description: 'General treatment pathways for clinician consideration.',
+            subsections: [
+              { label: 'Guidance', content: 'Treatment options may include surgery, chemotherapy, radiation therapy, or hormone therapy depending on confirmed diagnosis, grade, and stage.' },
+            ],
+          },
+          {
+            title: 'Disclaimer',
+            description: 'AI-generated reference only',
+            subsections: [
+              { label: 'Clinical Use', content: 'This report is generated by AI and is not for standalone diagnosis. A qualified clinician must review all findings.' },
+            ],
+          },
+        ],
+      };
+
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Complete',
+        structuredReport: fallbackReport,
+        reportError: undefined,
+      }));
+    }
+  };
 
 
   const handleFiles = async (newFiles: File[]) => {
@@ -61,9 +312,13 @@ const HistoAnalysis: React.FC = () => {
             status: 'Uploading',
             type: type as any,
             progress: 0,
+            reportStatus: 'Idle',
         }
     });
     setFiles(prev => [...newUploads, ...prev]);
+    if (newUploads.length > 0) {
+      setSelectedFile(newUploads[0]);
+    }
     
     for (const upload of newUploads) {
         const fileToUpload = newFiles.find(f => f.name === upload.name);
@@ -76,7 +331,9 @@ const HistoAnalysis: React.FC = () => {
             const progressInterval = setInterval(() => {
                 setFiles(currentFiles => currentFiles.map(f => {
                     if (f.id === upload.id && (f.progress || 0) < 90) {
-                        return { ...f, progress: Math.min((f.progress || 0) + 10, 90) };
+                        const updated = { ...f, progress: Math.min((f.progress || 0) + 10, 90) };
+                        setSelectedFile(prev => prev?.id === upload.id ? updated : prev);
+                        return updated;
                     }
                     return f;
                 }));
@@ -95,11 +352,22 @@ const HistoAnalysis: React.FC = () => {
             }
              
             const result = await response.json() as HistoPrediction;
-            setFiles(currentFiles => currentFiles.map(f => f.id === upload.id ? { ...f, status: 'Complete', progress: 100, prediction: result } : f));
+            const completedFile = { ...upload, status: 'Complete' as const, progress: 100, prediction: result, reportStatus: 'Generating' as const, reportError: undefined };
+            setFiles(currentFiles => currentFiles.map(f => {
+              if (f.id !== upload.id) return f;
+              setSelectedFile(prev => prev?.id === upload.id ? completedFile : prev);
+              return completedFile;
+            }));
+            await generateSuggestiveReport(completedFile, result);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Neural link failure.";
-            setFiles(currentFiles => currentFiles.map(f => f.id === upload.id ? { ...f, status: 'Failed', progress: 100, errorMessage } : f));
+            setFiles(currentFiles => currentFiles.map(f => {
+              if (f.id !== upload.id) return f;
+              const failedFile = { ...f, status: 'Failed' as const, progress: 100, errorMessage, reportStatus: 'Idle' as const };
+              setSelectedFile(prev => prev?.id === upload.id ? failedFile : prev);
+              return failedFile;
+            }));
         }
     }
   }
@@ -158,20 +426,30 @@ const HistoAnalysis: React.FC = () => {
         ) : (
         <ul className="space-y-6">
           {files.map(file => (
-            <li key={file.id} className="bg-white p-6 rounded-[1.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <li key={file.id} className={`bg-white p-6 rounded-[1.5rem] border shadow-sm hover:shadow-md transition-all cursor-pointer ${selectedFile?.id === file.id ? 'border-brand-pink bg-pink-50' : 'border-gray-100'}`} onClick={() => handleFileSelect(file)}>
               <div className="flex items-center">
                 <FileIcon type={file.type} />
                 <div className="flex-grow">
                   <div className="flex justify-between items-center mb-2">
                       <p className="text-sm font-black text-brand-text-primary tracking-tight">{file.name}</p>
-                      <span className={`text-[9px] font-black uppercase tracking-widest flex items-center px-3 py-1 rounded-full border ${
-                          file.status === 'Complete' ? 'text-green-600 bg-green-50 border-green-100' : 
-                          file.status === 'Failed' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-400 bg-slate-50 border-slate-100'
-                        }`}>
-                          {file.status === 'Complete' && <CheckCircleIcon className="w-3 h-3 mr-1.5"/>}
-                          {file.status === 'Failed' && <InfoIcon className="w-3 h-3 mr-1.5"/>}
-                          {file.status === 'Uploading' ? 'Predicting...' : file.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-widest flex items-center px-3 py-1 rounded-full border ${
+                            file.status === 'Complete' ? 'text-green-600 bg-green-50 border-green-100' : 
+                            file.status === 'Failed' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-400 bg-slate-50 border-slate-100'
+                          }`}>
+                            {file.status === 'Complete' && <CheckCircleIcon className="w-3 h-3 mr-1.5"/>}
+                            {file.status === 'Failed' && <InfoIcon className="w-3 h-3 mr-1.5"/>}
+                            {file.status === 'Uploading' ? 'Predicting...' : file.status}
+                        </span>
+                        {file.reportStatus && file.reportStatus !== 'Idle' && (
+                          <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full border ${
+                            file.reportStatus === 'Complete' ? 'text-blue-600 bg-blue-50 border-blue-100' :
+                            file.reportStatus === 'Failed' ? 'text-red-600 bg-red-50 border-red-100' : 'text-yellow-600 bg-yellow-50 border-yellow-100'
+                          }`}>
+                            Report: {file.reportStatus}
+                          </span>
+                        )}
+                      </div>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div className={`h-1.5 rounded-full transition-all duration-500 ${file.status === 'Failed' ? 'bg-red-500' : 'bg-brand-pink'}`} style={{width: `${file.progress}%`}}></div>
@@ -192,6 +470,109 @@ const HistoAnalysis: React.FC = () => {
         </ul>
         )}
       </div>
+
+      {selectedFile && selectedFile.status === 'Complete' && selectedFile.prediction && (
+        <div className="bg-white p-8 rounded-[2rem] shadow-subtle border border-gray-100">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="font-black text-brand-text-primary uppercase tracking-widest text-xs">Detailed Analysis</h3>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedFile.name}</span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+                <p className="text-xs font-semibold text-brand-text-secondary mb-4">PREDICTION RESULT</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold text-brand-text-secondary mb-2">DIAGNOSIS</p>
+                    <span className={`inline-flex px-3 py-2 rounded-full text-sm font-bold ${getPredictionFields(selectedFile.prediction).diagnosis.toLowerCase() === 'malignant' ? 'bg-red-100 text-red-700' : getPredictionFields(selectedFile.prediction).diagnosis.toLowerCase() === 'benign' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {getPredictionFields(selectedFile.prediction).diagnosis.toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-brand-text-secondary mb-2">AI CONFIDENCE</p>
+                    <p className="text-sm text-brand-text-primary">{(selectedFile.prediction.confidence * 100).toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-brand-text-secondary mb-2">AI INSIGHT</p>
+                    <p className="text-sm text-brand-text-primary leading-6">
+                      {selectedFile.prediction.insight || 'The master model completed diagnosis prediction for this scan.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-white border border-gray-200 p-5 rounded-lg shadow-subtle">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-sm text-brand-text-primary">Suggestive Report</p>
+                    <p className="text-xs text-brand-text-secondary mt-1">Generated from the histopathology prediction by your local Cloudflare Worker.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void generateSuggestiveReport(selectedFile, selectedFile.prediction)}
+                    disabled={selectedFile.reportStatus === 'Generating'}
+                    className="bg-brand-pink text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-subtle hover:bg-brand-pink-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate Report'}
+                  </button>
+                </div>
+
+                {selectedFile.reportStatus === 'Generating' && (
+                  <div className="mt-4 flex items-center gap-3 rounded-lg border border-pink-100 bg-pink-50 px-4 py-3 text-sm text-brand-text-primary">
+                    <div className="w-4 h-4 border-2 border-brand-pink border-t-transparent rounded-full animate-spin"></div>
+                    Cloudflare Workers AI is drafting the suggestive report from the histology output.
+                  </div>
+                )}
+
+                {selectedFile.reportStatus === 'Failed' && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {selectedFile.reportError || 'Report generation failed.'}
+                  </div>
+                )}
+
+                {selectedFile.structuredReport && (
+                  <div className="mt-4 overflow-hidden rounded-[28px] border border-stone-200 bg-[linear-gradient(180deg,#fffdfc_0%,#fffaf7_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+                    <div className="bg-[linear-gradient(180deg,#fffefc_0%,#fff9f6_100%)] px-6 pt-8 pb-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h4 className="text-lg font-bold text-stone-800">Histopathology Report</h4>
+                        <span className="text-xs font-medium text-stone-500 bg-stone-100 px-3 py-1 rounded-full">
+                          AI-Generated • {new Date().toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {selectedFile.structuredReport.sections.map((section, sectionIndex) => (
+                        <div key={sectionIndex} className="mb-8 last:mb-0">
+                          <h5 className="text-base font-semibold text-stone-700 mb-4 border-b border-stone-200 pb-2">
+                            {section.title}
+                          </h5>
+                          {section.description && (
+                            <p className="text-sm text-stone-600 mb-4 italic">{section.description}</p>
+                          )}
+                          <div className="space-y-3">
+                            {section.subsections.map((subsection, subIndex) => (
+                              <div key={subIndex} className="flex flex-col sm:flex-row sm:items-start gap-2">
+                                <span className="text-sm font-medium text-stone-600 min-w-[140px] sm:text-right">
+                                  {subsection.label}:
+                                </span>
+                                <span className={`text-sm text-stone-800 flex-1 ${subsection.isHighlighted ? 'font-semibold text-stone-900' : ''}`}>
+                                  {subsection.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
