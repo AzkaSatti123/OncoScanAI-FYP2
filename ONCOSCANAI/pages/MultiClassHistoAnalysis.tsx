@@ -174,42 +174,12 @@ const buildDisplaySections = (prediction: HistoPrediction | undefined, parsedRep
   }));
 };
 
-const getDocumentSectionTone = (title: string) => {
-  const normalized = title.toLowerCase();
-  if (normalized.includes('prediction')) return 'border-rose-200 bg-rose-50';
-  if (normalized.includes('risk')) return 'border-amber-200 bg-amber-50';
-  if (normalized.includes('recommend') || normalized.includes('treatment')) return 'border-sky-200 bg-sky-50';
-  if (normalized.includes('disclaimer')) return 'border-orange-200 bg-orange-50';
-  return 'border-slate-200 bg-white';
-};
-
-const getRiskPillClass = (value?: string) => {
-  const normalized = (value || '').toLowerCase();
-  if (normalized.includes('high')) return 'bg-red-100 text-red-700 border-red-200';
-  if (normalized.includes('moderate')) return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-};
-
-const getClassificationPanelClass = (slot: 'normal' | 'benign' | 'malignant', diagnosis?: string) => {
-  const normalized = (diagnosis || '').toLowerCase();
-  const active = normalized === slot;
-  if (!active) return 'border-stone-200 bg-white text-stone-400';
-  if (slot === 'malignant') return 'border-sky-300 bg-sky-50 text-stone-800';
-  if (slot === 'benign') return 'border-emerald-300 bg-emerald-50 text-stone-800';
-  return 'border-indigo-300 bg-indigo-50 text-stone-800';
-};
-
 const splitNumberedItems = (value?: string) =>
   (value || '')
     .split(/\s(?=\d+\.\s)/)
     .map(item => item.trim())
     .filter(Boolean);
 
-const splitFeatureItems = (value?: string) =>
-  (value || '')
-    .split(/;\s+|\.\s+(?=[A-Z])/)
-    .map(item => item.trim())
-    .filter(Boolean);
 
 const buildClinicalReportDocument = (
   file: UploadedFile,
@@ -713,187 +683,160 @@ const MultiClassHistoAnalysis: React.FC = () => {
                       </div>
                     )}
 
-                    {reportDocument && (
-                      <div className="mt-4 overflow-hidden rounded-[28px] border border-stone-200 bg-[linear-gradient(180deg,#fffdfc_0%,#fffaf7_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-                        {(() => {
-                          const getSection = (title: string) => reportDocument.sections.find(section => section.title === title);
-                          const headerSection = getSection('Header');
-                          const headerMap = new Map<string, string>((headerSection?.subsections || []).map(subsection => [subsection.label, subsection.content]));
-                          const subtypeSection = getSection('Histological Subtype');
-                          const subtypeMap = new Map<string, string>((subtypeSection?.subsections || []).map(subsection => [subsection.label, subsection.content]));
-                          const summaryText = getSection('Summary')?.subsections?.[0]?.content || 'Summary generated from model output.';
-                          const impressionText = getSection('Impression')?.subsections?.[0]?.content || 'Impression generated from model output.';
-                          const featuresText = getSection('Histopathological Features')?.subsections?.[0]?.content || 'Histopathological features generated from model output.';
-                          const quantitativeText = getSection('Quantitative Findings')?.subsections?.[0]?.content || '';
-                          const riskText = getSection('Risk Stratification')?.subsections?.[0]?.content || 'Moderate Risk';
-                          const nextStepsText = getSection('Recommended Clinical Next Steps')?.subsections?.[0]?.content || '1. Arrange specialist consultation. 2. Recommend confirmatory pathological review to validate AI-based histological findings. 3. Correlate with breast imaging. 4. Confirm subtype on pathology review. 5. Discuss in multidisciplinary review.';
-                          const managementText = getSection('Management Considerations')?.subsections?.[0]?.content || 'General management pathways may include surgery, chemotherapy, radiation therapy, and hormone-directed therapy depending on confirmed subtype and stage.';
-                          const limitationsText = getSection('Limitations')?.subsections?.[0]?.content || 'This AI-derived inference depends on image quality, representative sampling, and model training data. It does not replace formal histopathological diagnosis.';
-                          const disclaimerText = getSection('Disclaimer')?.subsections?.[0]?.content || 'This report is AI-generated for reference purposes only and must be reviewed by a qualified pathologist or oncologist before clinical decision-making.';
-                          const classification = headerMap.get('Classification') || selectedFields.diagnosis || 'Unknown';
-                          const aiConfidence = headerMap.get('AI Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`;
-                          const analysisTime = headerMap.get('Analysis Date & Time') || new Date().toLocaleString();
-                          const quantitativeMap = new Map<string, string>(
-                            quantitativeText
-                              .split(/;\s+/)
-                              .map(item => {
-                                const separatorIndex = item.indexOf(':');
-                                return separatorIndex === -1 ? null : [item.slice(0, separatorIndex).trim(), item.slice(separatorIndex + 1).trim()];
-                              })
-                              .filter((item): item is [string, string] => Boolean(item))
-                          );
-                          const nextSteps = splitNumberedItems(nextStepsText);
-                          const featureItems = splitFeatureItems(featuresText);
+                    {reportDocument && (() => {
+                      const getSection = (title: string) => reportDocument.sections.find(s => s.title === title);
+                      const headerMap = new Map<string, string>((getSection('Header')?.subsections || []).map(s => [s.label, s.content]));
+                      const subtypeMap = new Map<string, string>((getSection('Histological Subtype')?.subsections || []).map(s => [s.label, s.content]));
+                      const classification = headerMap.get('Classification') || selectedFields.diagnosis || 'Unknown';
+                      const aiConfidence = headerMap.get('AI Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`;
+                      const subclassLabel = subtypeMap.get('Predicted Subclass') || selectedFields.subclassLabel;
+                      const subclassId = subtypeMap.get('Subclass ID') || (selectedPrediction.class_id != null ? String(selectedPrediction.class_id) : 'N/A');
+                      const subclassConf = subtypeMap.get('Subclass Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`;
+                      const diagnosisConf = subtypeMap.get('Diagnosis Confidence') || (selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : `${(selectedPrediction.confidence * 100).toFixed(1)}%`);
+                      const summaryText = getSection('Summary')?.subsections?.[0]?.content || 'Summary generated from model output.';
+                      const impressionText = getSection('Impression')?.subsections?.[0]?.content || 'Impression generated from model output.';
+                      const featuresText = getSection('Histopathological Features')?.subsections?.[0]?.content || 'Histopathological features generated from model output.';
+                      const riskText = getSection('Risk Stratification')?.subsections?.[0]?.content || 'Moderate Risk';
+                      const nextStepsText = getSection('Recommended Clinical Next Steps')?.subsections?.[0]?.content || '1. Arrange specialist consultation. 2. Recommend confirmatory pathological review. 3. Correlate with breast imaging. 4. Confirm subtype on pathology review. 5. Discuss in multidisciplinary review.';
+                      const managementText = getSection('Management Considerations')?.subsections?.[0]?.content || 'General management pathways may include surgery, chemotherapy, radiation therapy, and hormone-directed therapy.';
+                      const limitationsText = getSection('Limitations')?.subsections?.[0]?.content || 'This AI-derived inference depends on image quality and model training data. It does not replace formal histopathological diagnosis.';
+                      const nextSteps = splitNumberedItems(nextStepsText);
+                      const reportId = `ONCO-${Date.now().toString(36).toUpperCase()}`;
+                      const now = new Date();
+                      const reportDate = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                      const reportTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                      const cl = classification.toLowerCase();
+                      const isMalignant = cl === 'malignant';
+                      const isBenign = cl === 'benign';
+                      const diagnosisBg = isMalignant ? 'bg-red-600' : isBenign ? 'bg-emerald-600' : 'bg-blue-600';
+                      const diagnosisBorder = isMalignant ? '#dc2626' : isBenign ? '#059669' : '#2563eb';
+                      const diagnosisLine1 = isMalignant
+                        ? `Infiltrating ${subclassLabel}, Malignant — OncoScanAI Master Model`
+                        : isBenign
+                        ? `${subclassLabel}, Benign Tissue — No Malignant Features`
+                        : `${subclassLabel} — ${classification} Tissue Pattern`;
 
-                          return (
-                            <>
-                              <div className="bg-[linear-gradient(180deg,#fffefc_0%,#fff9f6_100%)] px-6 pt-8 pb-6">
-                                <div className="flex items-center gap-6">
-                                  <div className="h-px flex-1 bg-stone-300" />
-                                  <h3 className="font-serif text-[1.6rem] font-semibold tracking-[0.12em] text-stone-700">ANALYSIS REPORT</h3>
-                                  <div className="h-px flex-1 bg-stone-300" />
-                                </div>
+                      return (
+                        <div className="mt-6 bg-white border border-gray-300 shadow-lg font-sans text-[13px] text-gray-900" id="pathology-report-multi">
 
-                                <div className="mt-8 grid gap-4 border-t border-stone-200 pt-6 text-sm text-stone-700 lg:grid-cols-4">
-                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">File Reference:</span> {selectedFile.name}</p>
-                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Classification:</span> {classification}</p>
-                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">AI Confidence:</span> {aiConfidence}</p>
-                                  <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Analysis Time:</span> {analysisTime}</p>
+                          {/* ── Header ── */}
+                          <div className="flex items-start gap-4 border-b-2 border-gray-800 px-6 pt-5 pb-4">
+                            <div className="w-14 h-14 flex-shrink-0 border border-gray-300 rounded flex items-center justify-center bg-gray-50 text-gray-400">
+                              <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.75H14.25M12 3.75V9M9 9H15M8.25 9C8.25 9 6 10.5 6 13.5C6 16.5 8.25 18 12 18C15.75 18 18 16.5 18 13.5C18 10.5 15.75 9 15.75 9M10.5 21H13.5M12 18V21" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-0.5 text-[12px]">
+                              <div><span className="font-bold">Case#:</span> {reportId}</div>
+                              <div><span className="font-bold">Facility:</span> OncoScanAI — AI Pathology Lab</div>
+                              <div><span className="font-bold">File:</span> {selectedFile.name}</div>
+                              <div><span className="font-bold">Collected:</span> {reportDate}</div>
+                              <div><span className="font-bold">Engine:</span> OncoScanAI Master Model</div>
+                              <div><span className="font-bold">Received:</span> {reportDate}</div>
+                              <div><span className="font-bold">AI Confidence:</span> {aiConfidence}</div>
+                              <div><span className="font-bold">Reported:</span> {reportDate} {reportTime}</div>
+                            </div>
+                          </div>
+
+                          {/* ── Title ── */}
+                          <div className="text-center py-4 border-b border-gray-300">
+                            <h2 className="text-[1.35rem] font-bold tracking-wide">Surgical Pathology Report</h2>
+                            <p className="text-[11px] text-gray-500 mt-0.5">AI-Assisted Multi-Class Histopathology Analysis — OncoScanAI</p>
+                          </div>
+
+                          {/* ── Diagnosis Box ── */}
+                          <div className={`mx-4 mt-4 rounded-sm ${diagnosisBg}`}>
+                            <div className="px-3 py-1.5">
+                              <p className="text-white font-black text-[11px] uppercase tracking-widest">Diagnosis</p>
+                            </div>
+                            <div className="bg-white border-l-4 border-r-4 border-b-4 mx-0 px-4 py-3 rounded-b-sm" style={{ borderColor: diagnosisBorder }}>
+                              <p className="font-bold text-[13px] leading-6">1. {diagnosisLine1}</p>
+                              <p className="font-bold text-[13px] leading-6">2. {riskText} — Subclass Confidence: {subclassConf} · Diagnosis Confidence: {diagnosisConf}</p>
+                            </div>
+                          </div>
+
+                          {/* ── NOTE ── */}
+                          <div className="mx-4 mt-3 text-[12px] leading-5 text-gray-700">
+                            <span className="font-bold">NOTE:</span> This report is AI-generated using the OncoScanAI Master Model (multi-class histopathology). IHC and molecular confirmatory testing may be required. Results must be reviewed and validated by a qualified pathologist before clinical use.
+                          </div>
+
+                          {/* ── Scan Image Strip ── */}
+                          {selectedFile.previewUrl && (
+                            <div className="mx-4 mt-5 flex gap-3">
+                              {[
+                                { label: 'Core Biopsy — Submitted View', filter: 'none' },
+                                { label: `${subclassLabel} Pattern`, filter: 'contrast(1.15) saturate(1.2)' },
+                                { label: 'Focal Gland / Tissue Formation', filter: 'contrast(1.3) brightness(0.9) saturate(0.8)' },
+                              ].map((img, idx) => (
+                                <div key={idx} className="flex-1 flex flex-col items-center">
+                                  <div className="w-full aspect-square border border-gray-300 overflow-hidden bg-gray-900">
+                                    <img src={selectedFile.previewUrl} alt={img.label} className="w-full h-full object-cover" style={{ filter: img.filter }} />
+                                  </div>
+                                  <p className="text-[10px] text-center text-gray-600 mt-1">{img.label}</p>
                                 </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* ── Clinical Sections ── */}
+                          <div className="mx-4 mt-5 space-y-3 pb-6">
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Clinical History: </span>
+                              <span className="text-[12px] leading-5">{summaryText}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Sites: </span>
+                              <span className="text-[12px] leading-5">Breast core biopsies — histopathology image submitted for multi-class AI subtype classification</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Gross: </span>
+                              <span className="text-[12px] leading-5">Scanned histological image file ({selectedFile.size}). Submitted for multi-class inference using OncoScanAI Master model. Predicted subclass: {subclassLabel} (Class ID: {subclassId}).</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Microscopic: </span>
+                              <span className="text-[12px] leading-5">{featuresText}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Impression: </span>
+                              <span className="text-[12px] leading-5">{impressionText}</span>
+                            </div>
+                            <div>
+                              <p className="font-bold uppercase text-[12px] mb-1">Recommended Clinical Next Steps:</p>
+                              <div className="pl-3 space-y-0.5">
+                                {(nextSteps.length ? nextSteps : [nextStepsText]).map((step, idx) => (
+                                  <p key={idx} className="text-[12px] leading-5">
+                                    <span className="font-semibold">{idx + 1}.</span> {step.replace(/^\d+\.\s*/, '')}
+                                  </p>
+                                ))}
                               </div>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Management Considerations: </span>
+                              <span className="text-[12px] leading-5">{managementText}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Limitations: </span>
+                              <span className="text-[12px] leading-5">{limitationsText}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold uppercase text-[12px]">Previous BX / AI History: </span>
+                              <span className="text-[12px] leading-5">No prior AI scan history available for this session.</span>
+                            </div>
+                          </div>
 
-                              <div className="px-6 pb-8">
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Classification:</p>
-                                    <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-stone-300 bg-white">
-                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('normal', classification)}`}>Normal Tissue</div>
-                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('benign', classification)}`}>Benign</div>
-                                      <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('malignant', classification)}`}>Malignant</div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Histological Subtype:</p>
-                                    <div className="rounded-2xl border border-rose-200 bg-[linear-gradient(180deg,#fff7fb_0%,#fffdfd_100%)] p-5">
-                                      <div className="grid gap-4 md:grid-cols-2">
-                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
-                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Predicted Subclass</p>
-                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Predicted Subclass') || selectedFields.subclassLabel}</p>
-                                        </div>
-                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
-                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Subclass ID</p>
-                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Subclass ID') || (selectedPrediction.class_id != null ? String(selectedPrediction.class_id) : 'Derived from model label set')}</p>
-                                        </div>
-                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
-                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Subclass Confidence</p>
-                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Subclass Confidence') || `${(selectedPrediction.confidence * 100).toFixed(1)}%`}</p>
-                                        </div>
-                                        <div className="rounded-xl border border-rose-100 bg-white/90 px-4 py-4">
-                                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-500">Diagnosis Confidence</p>
-                                          <p className="mt-2 text-base font-semibold text-stone-800">{subtypeMap.get('Diagnosis Confidence') || (selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : `${(selectedPrediction.confidence * 100).toFixed(1)}%`)}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Summary:</p>
-                                    <p className="text-[1rem] leading-9 text-stone-700">{summaryText}</p>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Impression:</p>
-                                    <p className="text-[1rem] leading-9 text-stone-700">{impressionText}</p>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Histopathological Features:</p>
-                                    <div className="space-y-4">
-                                      {(featureItems.length ? featureItems : [featuresText]).map((item, idx) => (
-                                        <div key={idx} className="flex gap-4 text-[0.98rem] leading-8 text-stone-700">
-                                          <span className="pt-1 text-stone-500">•</span>
-                                          <p>{item.replace(/\.$/, '')}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Quantitative Findings:</p>
-                                    <div className="grid gap-x-5 gap-y-6 md:grid-cols-2">
-                                      <div className="border-b border-stone-200 pb-5">
-                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">Classification</p>
-                                        <p className="mt-4 text-[1.15rem] text-stone-700">{classification}</p>
-                                      </div>
-                                      <div className="border-b border-stone-200 pb-5">
-                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">AI Confidence</p>
-                                        <p className="mt-4 text-[1.15rem] text-stone-700">{aiConfidence}</p>
-                                      </div>
-                                      <div className="border-b border-stone-200 pb-5">
-                                        <p className="font-serif text-[1.3rem] font-semibold text-stone-700">Diagnosis Confidence</p>
-                                        <p className="mt-4 text-[1.15rem] text-stone-700">{quantitativeMap.get('Diagnosis Confidence') || (selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : `${(selectedPrediction.confidence * 100).toFixed(1)}%`)}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Risk Stratification:</p>
-                                    <div>
-                                      <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold ${getRiskPillClass(riskText)}`}>{riskText}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Recommended Clinical Next Steps:</p>
-                                    <div className="space-y-6">
-                                      {(nextSteps.length ? nextSteps : [nextStepsText]).map((step, idx) => (
-                                        <div key={idx} className="grid gap-4 md:grid-cols-[22px_1fr]">
-                                          <p className="text-[1.2rem] font-semibold text-stone-700">{idx + 1}.</p>
-                                          <p className="text-[0.98rem] leading-9 text-stone-700">{step.replace(/^\d+\.\s*/, '')}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Management Considerations:</p>
-                                    <p className="text-[0.98rem] leading-9 text-stone-700">{managementText}</p>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 py-8">
-                                  <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                                    <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Limitations:</p>
-                                    <p className="text-[0.98rem] leading-9 text-stone-700">{limitationsText}</p>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-stone-200 pt-8">
-                                  <p className="text-center text-[0.98rem] leading-9 text-stone-600">{disclaimerText}</p>
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    )}
+                          {/* ── Footer ── */}
+                          <div className="border-t border-gray-300 mx-4 pt-3 pb-4 flex items-center justify-between">
+                            <p className="text-[10px] text-gray-400 italic max-w-lg">
+                              This AI-generated report is a preliminary draft for clinical reference only. A licensed pathologist must review and sign off before any diagnostic or treatment decision is made.
+                            </p>
+                            <div className="text-right text-[10px] text-gray-400">
+                              <p>{reportId}</p>
+                              <p>OncoScanAI v2</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {!selectedFile.structuredReport && !selectedFile.suggestiveReport && (
                       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">

@@ -88,27 +88,8 @@ const parseStructuredReport = (report?: string) => {
   return { sections };
 };
 
-const getRiskPillClass = (value?: string) => {
-  const n = (value || '').toLowerCase();
-  if (n.includes('high')) return 'bg-red-100 text-red-700 border-red-200';
-  if (n.includes('moderate')) return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-};
-
-const getClassificationPanelClass = (slot: 'normal' | 'benign' | 'malignant', pathology?: string) => {
-  const n = (pathology || '').toLowerCase();
-  const active = n === slot;
-  if (!active) return 'border-stone-200 bg-white text-stone-400';
-  if (slot === 'malignant') return 'border-sky-300 bg-sky-50 text-stone-800';
-  if (slot === 'benign') return 'border-emerald-300 bg-emerald-50 text-stone-800';
-  return 'border-indigo-300 bg-indigo-50 text-stone-800';
-};
-
 const splitNumberedItems = (value?: string) =>
   (value || '').split(/\s(?=\d+\.\s)/).map(i => i.trim()).filter(Boolean);
-
-const splitFeatureItems = (value?: string) =>
-  (value || '').split(/;\s+|\.\s+(?=[A-Z])/).map(i => i.trim()).filter(Boolean);
 
 const VisionWorkbench: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -357,167 +338,202 @@ const VisionWorkbench: React.FC = () => {
     const { analysis } = file;
     const pathology = analysis.pathology.toLowerCase();
     const confidence = `${(analysis.confidence * 100).toFixed(1)}%`;
-    const analysisDate = new Date().toLocaleString();
+    const reportId = `ONCO-${Date.now().toString(36).toUpperCase()}`;
+    const now = new Date();
+    const reportDate = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    const reportTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-    // Build display sections from structured or text report
     const parsedText = parseStructuredReport(file.suggestiveReport);
     const sectionMap = new Map((parsedText?.sections || []).map(s => [s.heading, s.content]));
     const sr = file.structuredReport;
-    const getStructuredContent = (title: string) =>
-      sr?.sections.find(s => s.title === title)?.subsections?.[0]?.content;
+    const getS = (title: string) => sr?.sections.find(s => s.title === title)?.subsections?.[0]?.content;
 
     const riskLevel = pathology === 'malignant' ? 'High Risk' : pathology === 'benign' ? 'Moderate Risk' : 'Low Risk';
 
-    const summaryText = sectionMap.get('Summary')
-      || getStructuredContent('Summary')
-      || `Tissue demonstrates morphological features consistent with ${analysis.pathology} classification at ${confidence} confidence. ${analysis.insight}`;
+    const clinicalHistory = sectionMap.get('Summary')
+      || getS('Summary')
+      || `Histology scan submitted for AI-assisted classification. ${analysis.insight}`;
 
-    const impressionText = sectionMap.get('Impression')
-      || getStructuredContent('Impression')
-      || `Impression suggests ${analysis.pathology} morphology at ${confidence} confidence; formal pathology correlation is required.`;
+    const grossDesc = `Scanned histological image file (${file.size}). Submitted for single-class inference using ${analysis.modelUsed} engine. Image processed in full resolution.`;
 
-    const featuresText = sectionMap.get('Histopathological Features')
-      || getStructuredContent('Histopathological Features')
-      || `Tissue architecture and cellular morphology consistent with ${analysis.pathology} classification; nuclear and stromal patterns require pathologist confirmation.`;
+    const microscopicDesc = sectionMap.get('Histopathological Features')
+      || getS('Histopathological Features')
+      || `Sections demonstrate tissue architecture and cellular morphology consistent with ${analysis.pathology} classification. Nuclear and stromal patterns are inferred by the AI model. ${analysis.insight}`;
+
+    const impression = sectionMap.get('Impression')
+      || getS('Impression')
+      || `AI inference indicates ${analysis.pathology} morphology at ${confidence} confidence. Formal pathology correlation is required.`;
 
     const nextStepsText = sectionMap.get('Recommended Clinical Next Steps')
-      || getStructuredContent('Recommended Clinical Next Steps')
-      || '1. Arrange specialist consultation. 2. Recommend confirmatory pathological review. 3. Correlate with mammography, MRI, or ultrasound. 4. Confirm findings on pathology review. 5. Discuss in multidisciplinary tumor board.';
+      || getS('Recommended Clinical Next Steps')
+      || '1. Arrange specialist consultation. 2. Confirm findings with biopsy or formal histopathological review. 3. Correlate with mammography, MRI, or ultrasound as clinically appropriate. 4. Discuss in multidisciplinary tumor board when indicated. 5. Initiate management pathway based on confirmed subtype and grade.';
 
     const managementText = sectionMap.get('Management Considerations')
-      || getStructuredContent('Management Considerations')
-      || 'General management pathways may include surgical intervention, chemotherapy, radiation therapy, and hormone-directed therapy depending on confirmed subtype, grade, and stage.';
-
-    const limitationsText = sectionMap.get('Limitations')
-      || getStructuredContent('Limitations')
-      || 'This AI-derived inference depends on image quality, representative sampling, and model training data. It is not a substitute for formal histopathological diagnosis.';
-
-    const disclaimerText = sectionMap.get('Disclaimer')
-      || getStructuredContent('Disclaimer')
-      || 'This draft is generated for preliminary review only. A qualified clinician must review, interpret, and confirm findings before forming a final diagnosis or treatment plan.';
-
-    const riskText = sectionMap.get('Risk Stratification')
-      || getStructuredContent('Risk Level Assessment')
-      || riskLevel;
+      || getS('Management Considerations')
+      || 'General management pathways may include surgical intervention, chemotherapy, radiation therapy, and hormone-directed therapy depending on confirmed subtype, grade, receptor status, and stage.';
 
     const nextSteps = splitNumberedItems(nextStepsText);
-    const featureItems = splitFeatureItems(featuresText);
+
+    const isMalignant = pathology === 'malignant';
+    const isBenign = pathology === 'benign';
+    const diagnosisBg = isMalignant ? 'bg-red-600' : isBenign ? 'bg-emerald-600' : 'bg-blue-600';
+    const diagnosisLabel = isMalignant
+      ? `${analysis.pathology} Tissue — High-Grade Pattern Identified`
+      : isBenign
+      ? `${analysis.pathology} Tissue — No Malignant Features Detected`
+      : `${analysis.pathology} Tissue — Inconclusive Pattern`;
 
     return (
-      <div className="mt-4 overflow-hidden rounded-[28px] border border-stone-200 bg-[linear-gradient(180deg,#fffdfc_0%,#fffaf7_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-        {/* Report header */}
-        <div className="bg-[linear-gradient(180deg,#fffefc_0%,#fff9f6_100%)] px-6 pt-8 pb-6">
-          <div className="flex items-center gap-6">
-            <div className="h-px flex-1 bg-stone-300" />
-            <h3 className="font-serif text-[1.6rem] font-semibold tracking-[0.12em] text-stone-700">ANALYSIS REPORT</h3>
-            <div className="h-px flex-1 bg-stone-300" />
+      <div className="mt-6 bg-white border border-gray-300 shadow-lg font-sans text-[13px] text-gray-900 print:shadow-none" id="pathology-report">
+
+        {/* ── Header ── */}
+        <div className="flex items-start gap-4 border-b-2 border-gray-800 px-6 pt-5 pb-4">
+          {/* Microscope icon placeholder */}
+          <div className="w-14 h-14 flex-shrink-0 border border-gray-300 rounded flex items-center justify-center bg-gray-50 text-gray-400">
+            <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.75H14.25M12 3.75V9M9 9H15M8.25 9C8.25 9 6 10.5 6 13.5C6 16.5 8.25 18 12 18C15.75 18 18 16.5 18 13.5C18 10.5 15.75 9 15.75 9M10.5 21H13.5M12 18V21" />
+            </svg>
           </div>
-          <div className="mt-8 grid gap-4 border-t border-stone-200 pt-6 text-sm text-stone-700 lg:grid-cols-4">
-            <p><span className="font-serif text-[1rem] font-semibold text-stone-700">File Reference:</span> {file.name}</p>
-            <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Classification:</span> {analysis.pathology}</p>
-            <p><span className="font-serif text-[1rem] font-semibold text-stone-700">AI Confidence:</span> {confidence}</p>
-            <p><span className="font-serif text-[1rem] font-semibold text-stone-700">Analysis Time:</span> {analysisDate}</p>
+
+          {/* Patient / case meta */}
+          <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-0.5 text-[12px]">
+            <div>
+              <span className="font-bold">Case#:</span> {reportId}
+            </div>
+            <div>
+              <span className="font-bold">Facility:</span> OncoScanAI — AI Pathology Lab
+            </div>
+            <div>
+              <span className="font-bold">File:</span> {file.name}
+            </div>
+            <div>
+              <span className="font-bold">Collected:</span> {reportDate}
+            </div>
+            <div>
+              <span className="font-bold">Engine:</span> {analysis.modelUsed}
+            </div>
+            <div>
+              <span className="font-bold">Received:</span> {reportDate}
+            </div>
+            <div>
+              <span className="font-bold">AI Confidence:</span> {confidence}
+            </div>
+            <div>
+              <span className="font-bold">Reported:</span> {reportDate} {reportTime}
+            </div>
           </div>
         </div>
 
-        <div className="px-6 pb-8">
-          {/* Classification panel */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Classification:</p>
-              <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-stone-300 bg-white">
-                <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('normal', pathology)}`}>Normal Tissue</div>
-                <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('benign', pathology)}`}>Benign</div>
-                <div className={`flex items-center justify-center px-4 py-5 font-serif text-[1.15rem] font-semibold transition-colors ${getClassificationPanelClass('malignant', pathology)}`}>Malignant</div>
-              </div>
-            </div>
-          </div>
+        {/* ── Title ── */}
+        <div className="text-center py-4 border-b border-gray-300">
+          <h2 className="text-[1.35rem] font-bold tracking-wide">Surgical Pathology Report</h2>
+          <p className="text-[11px] text-gray-500 mt-0.5">AI-Assisted Histopathology Analysis — OncoScanAI</p>
+        </div>
 
-          {/* Engine used */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Engine Used:</p>
-              <p className="text-[1rem] leading-9 text-stone-700">{analysis.modelUsed}</p>
-            </div>
+        {/* ── Diagnosis Box ── */}
+        <div className={`mx-4 mt-4 rounded-sm ${diagnosisBg}`}>
+          <div className="px-3 py-1.5">
+            <p className="text-white font-black text-[11px] uppercase tracking-widest">Diagnosis</p>
           </div>
-
-          {/* Summary */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Summary:</p>
-              <p className="text-[1rem] leading-9 text-stone-700">{summaryText}</p>
-            </div>
-          </div>
-
-          {/* Impression */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Impression:</p>
-              <p className="text-[1rem] leading-9 text-stone-700">{impressionText}</p>
-            </div>
-          </div>
-
-          {/* Histopathological Features */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Histopathological Features:</p>
-              <div className="space-y-4">
-                {(featureItems.length ? featureItems : [featuresText]).map((item, idx) => (
-                  <div key={idx} className="flex gap-4 text-[0.98rem] leading-8 text-stone-700">
-                    <span className="pt-1 text-stone-500">•</span>
-                    <p>{item.replace(/\.$/, '')}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Risk Stratification */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Risk Stratification:</p>
-              <div>
-                <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold ${getRiskPillClass(riskText)}`}>{riskText}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Recommended Clinical Next Steps */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Recommended Clinical Next Steps:</p>
-              <div className="space-y-6">
-                {(nextSteps.length ? nextSteps : [nextStepsText]).map((step, idx) => (
-                  <div key={idx} className="grid gap-4 md:grid-cols-[22px_1fr]">
-                    <p className="text-[1.2rem] font-semibold text-stone-700">{idx + 1}.</p>
-                    <p className="text-[0.98rem] leading-9 text-stone-700">{step.replace(/^\d+\.\s*/, '')}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Management Considerations */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Management Considerations:</p>
-              <p className="text-[0.98rem] leading-9 text-stone-700">{managementText}</p>
-            </div>
-          </div>
-
-          {/* Limitations */}
-          <div className="border-t border-stone-200 py-8">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <p className="font-serif text-[1.35rem] font-semibold text-stone-700">Limitations:</p>
-              <p className="text-[0.98rem] leading-9 text-stone-700">{limitationsText}</p>
-            </div>
-          </div>
-
-          {/* Disclaimer */}
-          <div className="border-t border-stone-200 pt-8">
-            <p className="text-center text-[0.98rem] leading-9 text-stone-600">{disclaimerText}</p>
+          <div className="bg-white border-l-4 border-r-4 border-b-4 border-current mx-0 px-4 py-3 rounded-b-sm" style={{ borderColor: isMalignant ? '#dc2626' : isBenign ? '#059669' : '#2563eb' }}>
+            <p className="font-bold text-[13px] leading-6">
+              1. {diagnosisLabel}
+            </p>
+            <p className="font-bold text-[13px] leading-6">
+              2. {riskLevel} — AI Model Confidence: {confidence}
+            </p>
           </div>
         </div>
+
+        {/* ── NOTE ── */}
+        <div className="mx-4 mt-3 text-[12px] leading-5 text-gray-700">
+          <span className="font-bold">NOTE:</span> This report is AI-generated using the {analysis.modelUsed} model. Immunohistochemical (IHC) and molecular confirmatory testing may be required. Results must be reviewed and validated by a qualified pathologist before clinical use.
+        </div>
+
+        {/* ── Scan Image Strip ── */}
+        {file.previewUrl && (
+          <div className="mx-4 mt-5 flex gap-3">
+            {[
+              { label: 'Histology Scan — Submitted View', src: file.previewUrl },
+              { label: 'AI Analysis View', src: file.previewUrl },
+              { label: 'Inference Focus Region', src: file.previewUrl },
+            ].map((img, idx) => (
+              <div key={idx} className="flex-1 flex flex-col items-center">
+                <div className="w-full aspect-square border border-gray-300 overflow-hidden bg-gray-900">
+                  <img
+                    src={img.src}
+                    alt={img.label}
+                    className="w-full h-full object-cover"
+                    style={{ filter: idx === 1 ? 'contrast(1.15) saturate(1.2)' : idx === 2 ? 'contrast(1.3) brightness(0.9) saturate(0.8)' : 'none' }}
+                  />
+                </div>
+                <p className="text-[10px] text-center text-gray-600 mt-1">{img.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Clinical Sections ── */}
+        <div className="mx-4 mt-5 space-y-3 pb-6">
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Clinical History: </span>
+            <span className="text-[12px] leading-5">{clinicalHistory}</span>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Sites: </span>
+            <span className="text-[12px] leading-5">Histology image — single core biopsy or whole-slide scan submitted for AI classification</span>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Gross: </span>
+            <span className="text-[12px] leading-5">{grossDesc}</span>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Microscopic: </span>
+            <span className="text-[12px] leading-5">{microscopicDesc}</span>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Impression: </span>
+            <span className="text-[12px] leading-5">{impression}</span>
+          </div>
+
+          <div>
+            <p className="font-bold uppercase text-[12px] mb-1">Recommended Clinical Next Steps:</p>
+            <div className="pl-3 space-y-0.5">
+              {(nextSteps.length ? nextSteps : [nextStepsText]).map((step, idx) => (
+                <p key={idx} className="text-[12px] leading-5">
+                  <span className="font-semibold">{idx + 1}.</span> {step.replace(/^\d+\.\s*/, '')}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Management Considerations: </span>
+            <span className="text-[12px] leading-5">{managementText}</span>
+          </div>
+
+          <div>
+            <span className="font-bold uppercase text-[12px]">Previous BX / AI History: </span>
+            <span className="text-[12px] leading-5">No prior AI scan history available for this session.</span>
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="border-t border-gray-300 mx-4 pt-3 pb-4 flex items-center justify-between">
+          <p className="text-[10px] text-gray-400 italic max-w-lg">
+            This AI-generated report is a preliminary draft for clinical reference only. A licensed pathologist must review and sign off before any diagnostic or treatment decision is made.
+          </p>
+          <div className="text-right text-[10px] text-gray-400">
+            <p>{reportId}</p>
+            <p>OncoScanAI v2</p>
+          </div>
+        </div>
+
       </div>
     );
   };
