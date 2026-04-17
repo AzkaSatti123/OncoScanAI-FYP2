@@ -332,16 +332,16 @@ const UploadScans: React.FC = () => {
             onDragLeave={e => handleDragEvents(e, false)}
             onDragOver={e => e.preventDefault()}
             onDrop={onDrop}
-            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-5 py-4 transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-6 py-8 transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
           >
             <input type="file" id="vision-upload" className="hidden" multiple onChange={e => e.target.files && handleFileDrop(Array.from(e.target.files))} />
             <label htmlFor="vision-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-5 h-5 text-blue-500" />
+              <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-7 h-7 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-700">Drop Ultrasound Scan or <span className="text-blue-500 underline">Browse</span></p>
-                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, DICOM — Max 500MB</p>
+                <p className="text-base font-bold text-slate-700">Drop Ultrasound Scan or <span className="text-blue-500 underline">Browse</span></p>
+                <p className="text-xs text-slate-400 mt-1">PNG, JPG, DICOM — Max 500MB</p>
               </div>
             </label>
           </div>
@@ -381,7 +381,57 @@ const UploadScans: React.FC = () => {
         {selectedFile && selectedFile.status === 'Complete' && selectedFile.analysis ? (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 h-full">
 
-            {/* LEFT — Radiology Report */}
+            {/* LEFT — Model Results */}
+            <div className="overflow-y-auto flex flex-col gap-4">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
+
+              {/* Scan panels */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Original Scan</p>
+                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden">
+                    <img src={selectedFile.previewUrl} alt="Original" className="max-w-full max-h-full object-contain" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Segmentation</p>
+                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    <img src={selectedFile.previewUrl} alt="Seg" className="max-w-full max-h-full object-contain" />
+                    {selectedFile.analysis.segmentationMask && (
+                      <img src={selectedFile.analysis.segmentationMask} alt="Mask" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <AnalysisStatCard title="AI CONFIDENCE" value={`${(selectedFile.analysis.confidence * 100).toFixed(1)}%`} />
+                <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm²` : 'N/A'} />
+                <AnalysisStatCard title="TUMOUR PIXELS" value={selectedFile.analysis.pixels != null ? `${selectedFile.analysis.pixels} PX` : 'N/A'} />
+              </div>
+
+              {/* Insight */}
+              <div className="bg-blue-50 border-l-4 border-blue-400 text-brand-text-primary p-4 rounded-r-lg">
+                <p className="font-semibold text-sm">Radiologist Insight:</p>
+                <p className="text-sm mt-1">{selectedFile.analysis.insight}</p>
+              </div>
+
+              {/* Engine */}
+              <div className="flex items-center gap-2 text-[10px] text-brand-text-secondary bg-white border border-gray-200 rounded-lg p-3">
+                <ModelIcon className="w-3.5 h-3.5" />
+                <span className="font-bold">MODELS: {selectedFile.analysis.modelUsed}</span>
+                <span className="text-green-600 font-bold flex items-center gap-1 ml-2"><LiveIcon className="w-3 h-3" /> LIVE INFERENCE</span>
+              </div>
+              {selectedFile.analysis.classificationEngine && (
+                <div className="text-[10px] text-brand-text-secondary space-y-0.5 px-1">
+                  <p>Classification: {selectedFile.analysis.classificationEngine}</p>
+                  {selectedFile.analysis.segmentationEngine && <p>Segmentation: {selectedFile.analysis.segmentationEngine}</p>}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT — Radiology Report */}
             <div className="overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Radiology Report</h3>
@@ -555,55 +605,6 @@ const UploadScans: React.FC = () => {
               })()}
             </div>
 
-            {/* RIGHT — Model Results */}
-            <div className="overflow-y-auto flex flex-col gap-4">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
-
-              {/* Scan panels */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Original Scan</p>
-                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden">
-                    <img src={selectedFile.previewUrl} alt="Original" className="max-w-full max-h-full object-contain" />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Segmentation</p>
-                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden relative">
-                    <img src={selectedFile.previewUrl} alt="Seg" className="max-w-full max-h-full object-contain" />
-                    {selectedFile.analysis.segmentationMask && (
-                      <img src={selectedFile.analysis.segmentationMask} alt="Mask" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Stat cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <AnalysisStatCard title="AI CONFIDENCE" value={`${(selectedFile.analysis.confidence * 100).toFixed(1)}%`} />
-                <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm²` : 'N/A'} />
-                <AnalysisStatCard title="TUMOUR PIXELS" value={selectedFile.analysis.pixels != null ? `${selectedFile.analysis.pixels} PX` : 'N/A'} />
-              </div>
-
-              {/* Insight */}
-              <div className="bg-blue-50 border-l-4 border-blue-400 text-brand-text-primary p-4 rounded-r-lg">
-                <p className="font-semibold text-sm">Radiologist Insight:</p>
-                <p className="text-sm mt-1">{selectedFile.analysis.insight}</p>
-              </div>
-
-              {/* Engine */}
-              <div className="flex items-center gap-2 text-[10px] text-brand-text-secondary bg-white border border-gray-200 rounded-lg p-3">
-                <ModelIcon className="w-3.5 h-3.5" />
-                <span className="font-bold">MODELS: {selectedFile.analysis.modelUsed}</span>
-                <span className="text-green-600 font-bold flex items-center gap-1 ml-2"><LiveIcon className="w-3 h-3" /> LIVE INFERENCE</span>
-              </div>
-              {selectedFile.analysis.classificationEngine && (
-                <div className="text-[10px] text-brand-text-secondary space-y-0.5 px-1">
-                  <p>Classification: {selectedFile.analysis.classificationEngine}</p>
-                  {selectedFile.analysis.segmentationEngine && <p>Segmentation: {selectedFile.analysis.segmentationEngine}</p>}
-                </div>
-              )}
-            </div>
           </div>
 
         ) : selectedFile && selectedFile.status === 'Failed' ? (

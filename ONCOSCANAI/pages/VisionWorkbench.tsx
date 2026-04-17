@@ -412,19 +412,19 @@ const VisionWorkbench: React.FC = () => {
 
           {/* Drop zone */}
           <div
-            className={`border-2 border-dashed rounded-xl flex items-center justify-center gap-4 px-5 py-4 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-slate-200 hover:border-brand-pink/50'}`}
+            className={`border-2 border-dashed rounded-xl flex items-center justify-center gap-4 px-6 py-8 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-slate-200 hover:border-brand-pink/50'}`}
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={e => { setIsDragging(false); onFileDrop(e); }}
           >
             <input type="file" id="file-upload" className="hidden" multiple onChange={onFileDrop} />
             <label htmlFor="file-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-5 h-5 text-brand-pink" />
+              <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-7 h-7 text-brand-pink" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
-                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, TIFF, SVS supported</p>
+                <p className="text-base font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
+                <p className="text-xs text-slate-400 mt-1">PNG, JPG, TIFF, SVS supported</p>
               </div>
             </label>
           </div>
@@ -460,32 +460,7 @@ const VisionWorkbench: React.FC = () => {
         selectedFile.status === 'Complete' && selectedFile.analysis ? (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 flex-1 min-h-0">
 
-            {/* LEFT — Surgical Pathology Report */}
-            <div className="overflow-y-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
-                <div className="flex items-center gap-2">
-                  {selectedFile.reportStatus === 'Generating' && (
-                    <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
-                  )}
-                  <button
-                    onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
-                    disabled={selectedFile.reportStatus === 'Generating'}
-                    className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
-                    Regenerate
-                  </button>
-                  <button
-                    onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
-                    <DownloadIcon className="w-3 h-3" />
-                    Download PDF
-                  </button>
-                </div>
-              </div>
-              <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
-            </div>
-
-            {/* RIGHT — Model Results */}
+            {/* LEFT — Model Results */}
             <div className="overflow-y-auto flex flex-col gap-5">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
 
@@ -540,6 +515,31 @@ const VisionWorkbench: React.FC = () => {
                   Confirm Diagnosis
                 </button>
               </div>
+            </div>
+
+            {/* RIGHT — Surgical Pathology Report */}
+            <div className="overflow-y-auto">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
+                <div className="flex items-center gap-2">
+                  {selectedFile.reportStatus === 'Generating' && (
+                    <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
+                  )}
+                  <button
+                    onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
+                    disabled={selectedFile.reportStatus === 'Generating'}
+                    className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
+                    <DownloadIcon className="w-3 h-3" />
+                    Download PDF
+                  </button>
+                </div>
+              </div>
+              <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
             </div>
           </div>
         ) : selectedFile.status === 'Failed' ? (

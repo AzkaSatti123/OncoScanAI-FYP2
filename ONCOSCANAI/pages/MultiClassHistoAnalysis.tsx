@@ -413,17 +413,17 @@ const MultiClassHistoAnalysis: React.FC = () => {
             onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-5 py-4 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-gray-200 hover:border-brand-pink/50'}`}
+            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-6 py-8 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-gray-200 hover:border-brand-pink/50'}`}
           >
             <input type="file" id="histo-file-upload" className="hidden" multiple accept=".png,.jpg,.jpeg,.svs,.tiff"
               onChange={e => e.target.files && handleFiles(Array.from(e.target.files))} />
             <label htmlFor="histo-file-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-5 h-5 text-brand-pink" />
+              <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-7 h-7 text-brand-pink" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
-                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, TIFF, SVS · OncoScanAI Master Model</p>
+                <p className="text-base font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
+                <p className="text-xs text-slate-400 mt-1">PNG, JPG, TIFF, SVS · OncoScanAI Master Model</p>
               </div>
             </label>
           </div>
@@ -464,30 +464,7 @@ const MultiClassHistoAnalysis: React.FC = () => {
           {selectedFile && selectedFile.status === 'Complete' && selectedPrediction ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 h-full">
 
-              {/* LEFT — Report */}
-              <div className="overflow-y-auto">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
-                  <div className="flex items-center gap-2">
-                    {selectedFile.reportStatus === 'Generating' && (
-                      <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
-                    )}
-                    <button onClick={() => enrichReport(selectedFile, selectedPrediction)}
-                      disabled={selectedFile.reportStatus === 'Generating'}
-                      className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
-                      Regenerate
-                    </button>
-                    <button onClick={() => downloadReportAsPDF('pathology-report-multi', `MultiHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
-                      <DownloadIcon className="w-3 h-3" />
-                      Download PDF
-                    </button>
-                  </div>
-                </div>
-                <MultiPathologyReport file={selectedFile} prediction={selectedPrediction} />
-              </div>
-
-              {/* RIGHT — Model Results */}
+              {/* LEFT — Model Results */}
               <div className="overflow-y-auto flex flex-col gap-4">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
 
@@ -539,6 +516,29 @@ const MultiClassHistoAnalysis: React.FC = () => {
                   <span className="font-bold">ONCOSCANAI MASTER</span>
                   <span className="text-green-600 font-bold flex items-center gap-1"><LiveIcon className="w-3 h-3" /> LIVE</span>
                 </div>
+              </div>
+
+              {/* RIGHT — Surgical Pathology Report */}
+              <div className="overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
+                  <div className="flex items-center gap-2">
+                    {selectedFile.reportStatus === 'Generating' && (
+                      <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
+                    )}
+                    <button onClick={() => enrichReport(selectedFile, selectedPrediction)}
+                      disabled={selectedFile.reportStatus === 'Generating'}
+                      className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
+                      Regenerate
+                    </button>
+                    <button onClick={() => downloadReportAsPDF('pathology-report-multi', `MultiHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
+                      <DownloadIcon className="w-3 h-3" />
+                      Download PDF
+                    </button>
+                  </div>
+                </div>
+                <MultiPathologyReport file={selectedFile} prediction={selectedPrediction} />
               </div>
             </div>
           ) : selectedFile && selectedFile.status === 'Failed' ? (
