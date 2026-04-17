@@ -157,7 +157,7 @@ const PathologyReport: React.FC<{ file: UploadedFile; analysis: AnalysisResult }
             { label: 'Focal Gland Formation',           filter: 'contrast(1.35) brightness(0.88) saturate(0.75)' },
           ].map((img, i) => (
             <div key={i} className="flex flex-col items-center">
-              <div className="w-full h-24 border border-gray-400 overflow-hidden bg-gray-900">
+              <div className="w-full h-36 border border-gray-400 overflow-hidden bg-gray-900">
                 <img
                   src={file.previewUrl}
                   alt={img.label}
@@ -488,7 +488,7 @@ const VisionWorkbench: React.FC = () => {
                 <div className="grid md:grid-cols-2 gap-8">
                   {/* Scan image */}
                   <div className="relative group">
-                    <div className="aspect-square bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl flex items-center justify-center border-8 border-slate-50">
+                    <div className="h-64 bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl flex items-center justify-center border-4 border-slate-50">
                       <img src={selectedFile.previewUrl} className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity" alt="Scan" />
                       {selectedFile.status === 'Analyzing' && (
                         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center">
