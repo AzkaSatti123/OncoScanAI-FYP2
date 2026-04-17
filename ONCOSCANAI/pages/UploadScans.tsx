@@ -387,7 +387,7 @@ const UploadScans: React.FC = () => {
       </div>
 
       {/* Right Column */}
-      <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-subtle border border-gray-200 flex flex-col">
+      <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-subtle border border-gray-200 overflow-y-auto">
         {selectedFile ? (
             <>
             <div className="flex justify-between items-start">
@@ -417,19 +417,17 @@ const UploadScans: React.FC = () => {
 
             {selectedFile.status === 'Complete' && selectedFile.analysis ? (
             <>
-            <div className="grid grid-cols-2 gap-6 my-6 flex-grow">
+            <div className="grid grid-cols-2 gap-6 my-6">
                 <div className="flex flex-col">
                     <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center">ORIGINAL SCAN</p>
-                    {/* Original scan (no overlay) */}
-                    <div className="flex-grow bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
+                    <div className="h-52 bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
                         <img src={selectedFile.previewUrl} alt="Original Scan" className="max-w-full max-h-full object-contain"/>
                     </div>
                 </div>
                 <div className="flex flex-col">
                   <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center">SEGMENTATION OVERLAY</p>
-                  <div className="flex-grow bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
+                  <div className="h-52 bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
                     <img src={selectedFile.previewUrl} alt="Scan" className="max-w-full max-h-full object-contain" />
-                    {/* Show backend-generated overlay image (if present) as a separate view */}
                     {selectedFile.analysis?.segmentationMask ? (
                       <img src={selectedFile.analysis.segmentationMask} alt="Segmentation Overlay" className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none" style={{mixBlendMode: 'screen'}} />
                     ) : null}
