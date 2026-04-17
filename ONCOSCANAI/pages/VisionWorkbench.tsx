@@ -150,14 +150,14 @@ const PathologyReport: React.FC<{ file: UploadedFile; analysis: AnalysisResult }
 
       {/* ══ IMAGE STRIP ══ */}
       {file.previewUrl && (
-        <div className="mx-5 mt-5 grid grid-cols-3 gap-3">
+        <div className="mx-5 mt-4 grid grid-cols-3 gap-3">
           {[
             { label: 'Core Biopsies, Low Power',       filter: 'none' },
             { label: 'Infiltrating Tissue Pattern',     filter: 'contrast(1.2) saturate(1.25)' },
             { label: 'Focal Gland Formation',           filter: 'contrast(1.35) brightness(0.88) saturate(0.75)' },
           ].map((img, i) => (
             <div key={i} className="flex flex-col items-center">
-              <div className="w-full border border-gray-400 overflow-hidden bg-gray-900" style={{ aspectRatio: '1' }}>
+              <div className="w-full h-24 border border-gray-400 overflow-hidden bg-gray-900">
                 <img
                   src={file.previewUrl}
                   alt={img.label}
