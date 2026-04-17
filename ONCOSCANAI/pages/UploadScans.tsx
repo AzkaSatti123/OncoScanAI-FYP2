@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import type { AnalysisResult, UploadedFile } from '../types';
-import { UploadIcon, ModelIcon, LiveIcon, VisionIcon, InfoIcon } from '../components/icons';
+import { UploadIcon, ModelIcon, LiveIcon, VisionIcon, InfoIcon, DownloadIcon } from '../components/icons';
+import { downloadReportAsPDF } from '../utils/downloadPDF';
 // --- Helper Functions ---
 
 type ModelsResponse = {
@@ -469,6 +470,14 @@ const UploadScans: React.FC = () => {
                     className="bg-brand-pink text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-brand-pink-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                   >
                     {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate Report'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadReportAsPDF('us-report', `Ultrasound-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                    className="flex items-center gap-2 bg-[#1e3a5f] text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-[#1e40af] transition-colors shadow-md"
+                  >
+                    <DownloadIcon className="w-4 h-4" />
+                    Download PDF
                   </button>
                 </div>
               </div>

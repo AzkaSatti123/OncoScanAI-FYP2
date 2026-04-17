@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UploadIcon, ModelIcon, VisionIcon, InfoIcon, DownloadIcon, PrintIcon } from '../components/icons';
 import type { UploadedFile, AnalysisResult, HistoPrediction, StructuredReport } from '../types';
+import { downloadReportAsPDF } from '../utils/downloadPDF';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
 const REPORT_WORKER_URL = '/report';
@@ -486,15 +487,21 @@ const VisionWorkbench: React.FC = () => {
                   className="p-2 text-slate-400 hover:text-brand-pink hover:bg-pink-50 rounded-xl transition-all">
                   <PrintIcon className="w-5 h-5" />
                 </button>
-                <button className="p-2 text-slate-400 hover:text-brand-pink hover:bg-pink-50 rounded-xl transition-all">
-                  <DownloadIcon className="w-5 h-5" />
-                </button>
                 {selectedFile.status === 'Complete' && selectedFile.analysis && (
-                  <button
-                    onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
-                    className="ml-2 px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark transition-all">
-                    Regenerate
-                  </button>
+                  <>
+                    <button
+                      onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
+                      className="p-2 text-slate-400 hover:text-brand-pink hover:bg-pink-50 rounded-xl transition-all"
+                      title="Regenerate Report">
+                      <DownloadIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                      className="ml-1 flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
+                      <DownloadIcon className="w-4 h-4" />
+                      Download PDF
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -579,6 +586,12 @@ const VisionWorkbench: React.FC = () => {
                         disabled={selectedFile.reportStatus === 'Generating'}
                         className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
                         Regenerate Report
+                      </button>
+                      <button
+                        onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
+                        <DownloadIcon className="w-4 h-4" />
+                        Download PDF
                       </button>
                     </div>
                   </div>

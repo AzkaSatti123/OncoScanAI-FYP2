@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { HistoPrediction, UploadedFile, StructuredReport } from '../types';
-import { UploadIcon, InfoIcon, VisionIcon, LiveIcon, ModelIcon } from '../components/icons';
+import { UploadIcon, InfoIcon, VisionIcon, LiveIcon, ModelIcon, DownloadIcon } from '../components/icons';
+import { downloadReportAsPDF } from '../utils/downloadPDF';
 
 type WorkerReportResponse = { report?: string; patientInfo?: Record<string, string>; sections?: unknown[] };
 type ErrorResponse = { detail?: string };
@@ -568,6 +569,12 @@ const MultiClassHistoAnalysis: React.FC = () => {
                           disabled={selectedFile.reportStatus === 'Generating'}
                           className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
                           Regenerate Report
+                        </button>
+                        <button
+                          onClick={() => downloadReportAsPDF('pathology-report-multi', `MultiHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                          className="flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
+                          <DownloadIcon className="w-4 h-4" />
+                          Download PDF
                         </button>
                       </div>
                     </div>
