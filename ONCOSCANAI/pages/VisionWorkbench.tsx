@@ -3,10 +3,15 @@ import { UploadIcon, ModelIcon, VisionIcon, InfoIcon, DownloadIcon, PrintIcon } 
 import type { UploadedFile, AnalysisResult, HistoPrediction } from '../types';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
+const REPORT_WORKER_URL = '/report';
 
 type ModelsResponse = {
   active_models?: string[];
   histo_models?: string[];
+};
+
+type WorkerReportResponse = {
+  report?: string;
 };
 
 const toAnalysisPathology = (result?: string): AnalysisResult['pathology'] => {
@@ -16,6 +21,12 @@ const toAnalysisPathology = (result?: string): AnalysisResult['pathology'] => {
   if (normalized === 'normal') return 'Normal';
   return 'Inconclusive';
 };
+
+const normalizeReportText = (report?: string) =>
+  (report || '')
+    .replace(/\*\*/g, '')
+    .replace(/mmÂ²/g, 'mm^2')
+    .trim();
 
 const deriveHistoModels = (data: ModelsResponse) => {
   if (Array.isArray(data.histo_models)) return data.histo_models.filter(m => m !== 'master');
@@ -68,6 +79,64 @@ const VisionWorkbench: React.FC = () => {
     fetchModels();
   }, []);
 
+  const updateUploadedFile = (fileId: string, updater: (file: UploadedFile) => UploadedFile) => {
+    setFiles(cur => cur.map(file => (file.id === fileId ? updater(file) : file)));
+  };
+
+  const generateSuggestiveReport = async (fileObj: UploadedFile, analysis: AnalysisResult) => {
+    updateUploadedFile(fileObj.id, file => ({
+      ...file,
+      reportStatus: 'Generating',
+      reportError: undefined,
+    }));
+
+    try {
+      const res = await fetch(REPORT_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: fileObj.name,
+          analysis: {
+            modality: 'histopathology',
+            pathology: analysis.pathology,
+            confidence: analysis.confidence,
+            insight: analysis.insight,
+            modelUsed: analysis.modelUsed,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => `Status ${res.status}`);
+        throw new Error(text || `Report generation failed (${res.status})`);
+      }
+
+      const json = await res.json() as WorkerReportResponse;
+      const report = normalizeReportText(json.report);
+
+      if (!report) {
+        throw new Error('Cloudflare Worker returned an empty report.');
+      }
+
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Complete',
+        suggestiveReport: report,
+        reportError: undefined,
+      }));
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      const msg = rawMsg === 'Failed to fetch'
+        ? 'Could not reach the local Cloudflare Worker at /report. Make sure `wrangler dev` is running for `backend/cf-report-worker`.'
+        : rawMsg;
+      updateUploadedFile(fileObj.id, file => ({
+        ...file,
+        reportStatus: 'Failed',
+        reportError: msg,
+      }));
+    }
+  };
+
   const handleAnalysis = async (fileId: string, rawFile: File, modelName: string) => {
     if (!modelName) return;
     
@@ -93,7 +162,25 @@ const VisionWorkbench: React.FC = () => {
         modelUsed: getModelDisplayName(modelName)
       };
 
-      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'Complete', analysis } : f));
+      const completed = {
+        status: 'Complete' as const,
+        analysis,
+        reportStatus: 'Generating' as const,
+        suggestiveReport: undefined,
+        reportError: undefined,
+      };
+
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, ...completed } : f));
+      const reportSeed: UploadedFile = {
+        id: fileId,
+        name: rawFile.name,
+        size: `${(rawFile.size / 1024).toFixed(1)} KB`,
+        status: 'Complete',
+        type: rawFile.name.split('.').pop() || 'unknown',
+        analysis,
+        reportStatus: 'Generating',
+      };
+      void generateSuggestiveReport(reportSeed, analysis);
     } catch (err) {
       setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'Failed', errorMessage: String(err) } : f));
     }
@@ -114,7 +201,8 @@ const VisionWorkbench: React.FC = () => {
       size: (rf.size / 1024).toFixed(1) + ' KB',
       status: 'Pending',
       type: rf.name.split('.').pop() || 'unknown',
-      previewUrl: URL.createObjectURL(rf)
+      previewUrl: URL.createObjectURL(rf),
+      reportStatus: 'Idle',
     }));
 
     setFiles(prev => [...newFiles, ...prev]);
@@ -281,6 +369,46 @@ const VisionWorkbench: React.FC = () => {
                        <p className="text-sm text-slate-600 leading-relaxed font-medium italic">
                          "{selectedFile.analysis.insight}"
                        </p>
+                    </div>
+
+                    <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">NLP Suggestive Report</h4>
+                          <p className="text-xs text-slate-500 mt-1">Generated by the Cloudflare NLP worker from Uni HistoAnalysis output.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void generateSuggestiveReport(selectedFile, selectedFile.analysis!)}
+                          disabled={selectedFile.reportStatus === 'Generating'}
+                          className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                        >
+                          {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate'}
+                        </button>
+                      </div>
+
+                      {selectedFile.reportStatus === 'Generating' && (
+                        <div className="mt-4 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50 px-4 py-3 text-xs text-slate-700">
+                          <div className="w-4 h-4 border-2 border-brand-pink border-t-transparent rounded-full animate-spin"></div>
+                          NLP worker is preparing the histology report.
+                        </div>
+                      )}
+
+                      {selectedFile.reportStatus === 'Failed' && (
+                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+                          {selectedFile.reportError || 'Report generation failed.'}
+                        </div>
+                      )}
+
+                      {selectedFile.suggestiveReport && (
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <pre className="whitespace-pre-wrap text-xs leading-6 text-slate-700 font-sans">{selectedFile.suggestiveReport}</pre>
+                        </div>
+                      )}
+
+                      {!selectedFile.suggestiveReport && selectedFile.reportStatus === 'Idle' && (
+                        <p className="mt-4 text-xs text-slate-500">The NLP report will appear after inference completes.</p>
+                      )}
                     </div>
 
                     <div className="mt-auto pt-8 border-t border-slate-100 flex items-center justify-between">
