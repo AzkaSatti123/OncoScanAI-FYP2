@@ -144,7 +144,7 @@ const PathologyReport: React.FC<{ file: UploadedFile; analysis: AnalysisResult }
               <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">AI Confidence</span>
               <span className="text-[11px] font-black" style={{ color: confBarColor }}>{confidence} — {confBarLabel}</span>
             </div>
-            <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-3 w-64 bg-gray-200 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-700" style={{ width: confidence, backgroundColor: confBarColor }} />
             </div>
           </div>
