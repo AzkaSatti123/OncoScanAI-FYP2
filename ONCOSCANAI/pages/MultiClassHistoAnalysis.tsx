@@ -55,7 +55,9 @@ const MultiPathologyReport: React.FC<{ file: UploadedFile; prediction: HistoPred
     ? `${fields.subclassLabel}, Benign Tissue — No Malignant Features`
     : `${fields.subclassLabel} — ${fields.diagnosis} Tissue Pattern`;
 
-  const diagLine2 = `${riskLevel} — Subclass Confidence: ${subclassConf} · Diagnosis Confidence: ${diagConf}`;
+  const subclassPct = (prediction.confidence ?? 0) * 100;
+  const confBarColor = subclassPct < 40 ? '#dc2626' : subclassPct <= 80 ? '#f59e0b' : '#16a34a';
+  const confBarLabel = subclassPct < 40 ? 'Low Confidence' : subclassPct <= 80 ? 'Moderate Confidence' : 'High Confidence';
 
   // Pull NLP enrichment when worker has already responded
   const sr = file.structuredReport;
@@ -137,7 +139,15 @@ const MultiPathologyReport: React.FC<{ file: UploadedFile; prediction: HistoPred
         </div>
         <div className="bg-white border-l-4 border-r-4 border-b-4 px-4 py-3" style={{ borderColor }}>
           <p className="font-bold text-[13px] leading-6">1. {diagLine1}</p>
-          <p className="font-bold text-[13px] leading-6">2. {diagLine2}</p>
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Subclass Confidence</span>
+              <span className="text-[11px] font-black" style={{ color: confBarColor }}>{subclassConf} — {confBarLabel}</span>
+            </div>
+            <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: subclassConf, backgroundColor: confBarColor }} />
+            </div>
+          </div>
         </div>
       </div>
 
