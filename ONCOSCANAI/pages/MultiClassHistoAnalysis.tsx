@@ -401,209 +401,161 @@ const MultiClassHistoAnalysis: React.FC = () => {
   const selectedFields     = getPredictionFields(selectedPrediction);
 
   return (
-    <div className="space-y-6 h-full">
+    <div className="flex flex-col gap-5 h-full">
 
-      {/* Page header */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-white via-pink-50 to-fuchsia-50 p-6 rounded-2xl shadow-subtle border border-pink-100">
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-brand-pink/20 rounded-full blur-2xl" />
-        <div className="absolute -bottom-12 -left-10 w-32 h-32 bg-fuchsia-200/40 rounded-full blur-2xl" />
-        <div className="relative">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900">Multi-Class Histoanalysis</h1>
-          <p className="text-sm md:text-base text-slate-600 mt-2">OncoScanAI Master model — subclass prediction and diagnosis mapping.</p>
-        </div>
-      </div>
+      {/* ══ TOP: Upload + queue ══ */}
+      <div className="bg-white rounded-2xl shadow-subtle border border-gray-200 p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Left: upload + queue */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+          {/* Drop zone */}
           <div
             onDragEnter={e => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
-            className={`relative flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-subtle border-2 border-dashed transition-all ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-gray-200'}`}
+            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-5 py-4 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-gray-200 hover:border-brand-pink/50'}`}
           >
-            <input
-              type="file" id="histo-file-upload" className="hidden" multiple
-              accept=".png,.jpg,.jpeg,.svs,.tiff"
-              onChange={e => e.target.files && handleFiles(Array.from(e.target.files))}
-            />
-            <label htmlFor="histo-file-upload" className="text-center cursor-pointer">
-              <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center">
-                <UploadIcon className="w-8 h-8 text-gray-400" />
+            <input type="file" id="histo-file-upload" className="hidden" multiple accept=".png,.jpg,.jpeg,.svs,.tiff"
+              onChange={e => e.target.files && handleFiles(Array.from(e.target.files))} />
+            <label htmlFor="histo-file-upload" className="flex items-center gap-3 cursor-pointer w-full">
+              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-5 h-5 text-brand-pink" />
               </div>
-              <p className="font-semibold text-brand-text-primary mt-4">Drop Histology Scan Here</p>
-              <p className="text-xs text-brand-text-secondary mt-1">PNG, JPG, TIFF, SVS</p>
+              <div>
+                <p className="text-sm font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
+                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, TIFF, SVS · OncoScanAI Master Model</p>
+              </div>
             </label>
           </div>
 
-          <div className="bg-white p-4 rounded-lg shadow-subtle border border-gray-200">
-            <div className="flex justify-between items-center mb-3 px-2">
-              <h3 className="font-semibold text-brand-text-primary text-sm">Scan Queue</h3>
-              <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{files.length} Files</span>
+          {/* Queue */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scan Queue</p>
+              <span className="text-[10px] font-black bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{files.length} Files</span>
             </div>
-            <ul className="space-y-2 max-h-64 overflow-y-auto">
-              {files.map(file => {
-                const f = getPredictionFields(file.prediction);
-                return (
-                  <li key={file.id} onClick={() => setSelectedFile(file)}
-                    className={`flex items-center p-2 rounded-md cursor-pointer transition-colors ${selectedFile?.id === file.id ? 'bg-pink-50' : 'hover:bg-gray-50'}`}>
-                    {file.previewUrl
-                      ? <img src={file.previewUrl} alt={file.name} className="w-10 h-10 rounded-md object-cover mr-3" />
-                      : <div className="w-10 h-10 rounded-md bg-gray-100 mr-3" />
-                    }
-                    <div className="flex-grow min-w-0">
-                      <p className="text-sm font-medium text-brand-text-primary truncate">{file.name}</p>
-                      <p className="text-xs text-brand-text-secondary">{file.size}</p>
-                    </div>
-                    {file.status === 'Uploading' && <div className="w-4 h-4 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />}
-                    {file.status === 'Complete' && (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getDiagnosisBadgeClass(f.diagnosis)}`}>
-                        {f.diagnosis.toUpperCase()}
-                      </span>
-                    )}
-                    {file.status === 'Failed' && <span className="text-xs font-bold text-red-500">Failed</span>}
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {files.length === 0
+                ? <p className="text-[10px] text-slate-400 text-center py-2">No scans uploaded yet</p>
+                : files.map(file => {
+                    const f = getPredictionFields(file.prediction);
+                    return (
+                      <button key={file.id} onClick={() => setSelectedFile(file)}
+                        className={`w-full flex items-center p-1.5 rounded-lg transition-colors ${selectedFile?.id === file.id ? 'bg-pink-50' : 'hover:bg-gray-50'}`}>
+                        {file.previewUrl
+                          ? <img src={file.previewUrl} alt={file.name} className="w-7 h-7 rounded-md object-cover mr-2" />
+                          : <div className="w-7 h-7 rounded-md bg-gray-100 mr-2" />}
+                        <p className="text-[10px] font-bold text-brand-text-primary truncate flex-grow text-left">{file.name}</p>
+                        {file.status === 'Uploading' && <div className="w-3 h-3 border-2 border-brand-pink border-t-transparent rounded-full animate-spin ml-1" />}
+                        {file.status === 'Complete' && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${getDiagnosisBadgeClass(f.diagnosis)}`}>{f.diagnosis.toUpperCase()}</span>}
+                        {file.status === 'Failed' && <span className="text-[9px] font-bold text-red-500 ml-1">Failed</span>}
+                      </button>
+                    );
+                  })
+              }
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Right: report output */}
-        <div className="lg:col-span-2 overflow-y-auto">
-          {selectedFile ? (
-            <>
-              {selectedFile.status === 'Complete' && selectedPrediction ? (
-                <div className="space-y-6">
+      {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
+      <div className="flex-1 min-h-0">
+        <div className="h-full">
+          {selectedFile && selectedFile.status === 'Complete' && selectedPrediction ? (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 h-full">
 
-                  {/* ── MODEL RESULTS ── */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-subtle overflow-hidden">
-                    {/* Header bar */}
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-pink-100 text-brand-pink rounded-lg flex items-center justify-center">
-                          <VisionIcon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-brand-text-primary text-sm">{selectedFile.name}</p>
-                          <div className="flex gap-3 text-[10px] text-brand-text-secondary mt-0.5">
-                            <span className="flex items-center gap-1"><ModelIcon className="w-3 h-3" /> ONCOSCANAI MASTER</span>
-                            <span className="flex items-center gap-1 text-green-600 font-medium"><LiveIcon className="w-3 h-3" /> LIVE INFERENCE</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-brand-text-secondary font-semibold uppercase">Diagnosis</p>
-                        <p className={`text-lg font-black ${
-                          selectedFields.diagnosis.toLowerCase() === 'malignant' ? 'text-red-600' :
-                          selectedFields.diagnosis.toLowerCase() === 'benign'    ? 'text-green-600' : 'text-blue-600'
-                        }`}>{selectedFields.diagnosis.toUpperCase()}</p>
-                      </div>
-                    </div>
-
-                    <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      {/* Uploaded scan */}
-                      <div>
-                        <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center uppercase">Uploaded Scan</p>
-                        <div className="bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center min-h-[220px]">
-                          {selectedFile.previewUrl
-                            ? <img src={selectedFile.previewUrl} alt={selectedFile.name} className="max-w-full max-h-64 object-contain" />
-                            : <div className="text-gray-400 text-sm">Preview unavailable</div>
-                          }
-                        </div>
-                      </div>
-
-                      {/* Detailed result */}
-                      <div>
-                        <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center uppercase">Detailed Result</p>
-                        <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 flex flex-col gap-4 min-h-[220px] justify-center">
-                          <div>
-                            <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 uppercase">Subclass</p>
-                            <span className="inline-flex px-3 py-1.5 rounded-full text-sm font-bold bg-gray-100 text-gray-800 border border-gray-200">
-                              {getPredictionFields(selectedPrediction).subclassLabel}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 uppercase">Diagnosis</p>
-                            <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-bold ${getDiagnosisBadgeClass(selectedFields.diagnosis)}`}>
-                              {selectedFields.diagnosis.toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 uppercase">AI Insight</p>
-                            <p className="text-sm text-brand-text-primary leading-6">
-                              {selectedPrediction.insight || 'The master model completed subclass prediction and diagnosis mapping.'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stat cards */}
-                    <div className="px-6 pb-6 grid grid-cols-3 gap-4">
-                      {[
-                        { label: 'Subclass Confidence', value: `${(selectedPrediction.confidence * 100).toFixed(1)}%` },
-                        { label: 'Diagnosis Confidence', value: selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : 'N/A' },
-                        { label: 'Predicted Class ID', value: selectedPrediction.class_id != null ? String(selectedPrediction.class_id) : 'N/A' },
-                      ].map(card => (
-                        <div key={card.label} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <p className="text-xs text-brand-text-secondary font-medium">{card.label}</p>
-                          <p className="text-xl font-semibold text-brand-text-primary mt-1">{card.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ── SURGICAL PATHOLOGY REPORT ── */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
-                      <div className="flex items-center gap-3">
-                        {selectedFile.reportStatus === 'Generating' && (
-                          <span className="text-[10px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating report…</span>
-                        )}
-                        <button
-                          onClick={() => enrichReport(selectedFile, selectedPrediction)}
-                          disabled={selectedFile.reportStatus === 'Generating'}
-                          className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
-                          Regenerate Report
-                        </button>
-                        <button
-                          onClick={() => downloadReportAsPDF('pathology-report-multi', `MultiHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                          className="flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
-                          <DownloadIcon className="w-4 h-4" />
-                          Download PDF
-                        </button>
-                      </div>
-                    </div>
-                    <MultiPathologyReport file={selectedFile} prediction={selectedPrediction} />
+              {/* LEFT — Report */}
+              <div className="overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
+                  <div className="flex items-center gap-2">
+                    {selectedFile.reportStatus === 'Generating' && (
+                      <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
+                    )}
+                    <button onClick={() => enrichReport(selectedFile, selectedPrediction)}
+                      disabled={selectedFile.reportStatus === 'Generating'}
+                      className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
+                      Regenerate
+                    </button>
+                    <button onClick={() => downloadReportAsPDF('pathology-report-multi', `MultiHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
+                      <DownloadIcon className="w-3 h-3" />
+                      Download PDF
+                    </button>
                   </div>
                 </div>
-              ) : selectedFile.status === 'Failed' ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center bg-white rounded-lg border border-gray-200 p-8">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                    <InfoIcon className="w-8 h-8 text-red-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-red-700 mb-2">Analysis Failed</h3>
-                  <p className="text-sm text-brand-text-secondary max-w-sm">{selectedFile.errorMessage || 'The model could not analyze this scan.'}</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-64 text-center bg-white rounded-lg border border-gray-200">
-                  <div className="w-12 h-12 border-2 border-brand-pink border-t-transparent rounded-full animate-spin mb-4" />
-                  <h3 className="text-lg font-semibold text-brand-text-primary">Processing Scan</h3>
-                  <p className="text-sm text-brand-text-secondary mt-1">Master model is running subclass prediction…</p>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-center bg-white rounded-lg border border-gray-200">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <VisionIcon className="w-8 h-8 text-gray-300" />
+                <MultiPathologyReport file={selectedFile} prediction={selectedPrediction} />
               </div>
-              <h3 className="text-lg font-semibold text-brand-text-primary">Select a scan</h3>
-              <p className="text-sm text-brand-text-secondary mt-1 max-w-sm">Upload a histology scan to generate the AI Surgical Pathology Report.</p>
+
+              {/* RIGHT — Model Results */}
+              <div className="overflow-y-auto flex flex-col gap-4">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
+
+                {/* Scan image */}
+                <div className="bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center" style={{ minHeight: '200px' }}>
+                  {selectedFile.previewUrl
+                    ? <img src={selectedFile.previewUrl} alt={selectedFile.name} className="max-w-full object-contain" style={{ maxHeight: '240px' }} />
+                    : <div className="text-gray-400 text-sm">Preview unavailable</div>}
+                </div>
+
+                {/* Diagnosis + subclass */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold text-brand-text-secondary uppercase mb-1">Diagnosis</p>
+                      <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-bold ${getDiagnosisBadgeClass(selectedFields.diagnosis)}`}>
+                        {selectedFields.diagnosis.toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-brand-text-secondary uppercase mb-1">Subclass</p>
+                      <span className="inline-flex px-3 py-1.5 rounded-full text-sm font-bold bg-gray-100 text-gray-800 border border-gray-200">
+                        {getPredictionFields(selectedPrediction).subclassLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-brand-text-secondary leading-5 italic">
+                    {selectedPrediction.insight || 'The master model completed subclass prediction and diagnosis mapping.'}
+                  </p>
+                </div>
+
+                {/* Stat cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Subclass Conf.', value: `${(selectedPrediction.confidence * 100).toFixed(1)}%` },
+                    { label: 'Diagnosis Conf.', value: selectedPrediction.pathology_confidence != null ? `${(selectedPrediction.pathology_confidence * 100).toFixed(1)}%` : 'N/A' },
+                    { label: 'Class ID', value: selectedPrediction.class_id != null ? String(selectedPrediction.class_id) : 'N/A' },
+                  ].map(c => (
+                    <div key={c.label} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                      <p className="text-[9px] text-brand-text-secondary font-semibold uppercase">{c.label}</p>
+                      <p className="text-lg font-black text-brand-text-primary mt-0.5">{c.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Engine badge */}
+                <div className="flex items-center gap-2 text-[10px] text-brand-text-secondary">
+                  <ModelIcon className="w-3.5 h-3.5" />
+                  <span className="font-bold">ONCOSCANAI MASTER</span>
+                  <span className="text-green-600 font-bold flex items-center gap-1"><LiveIcon className="w-3 h-3" /> LIVE</span>
+                </div>
+              </div>
+            </div>
+          ) : selectedFile && selectedFile.status === 'Failed' ? (
+            <div className="flex flex-col items-center justify-center h-48 text-center bg-white rounded-xl border border-gray-200">
+              <InfoIcon className="w-8 h-8 text-red-500 mb-3" />
+              <h3 className="text-base font-semibold text-red-700">Analysis Failed</h3>
+              <p className="text-sm text-brand-text-secondary mt-1 max-w-sm">{selectedFile.errorMessage}</p>
+            </div>
+          ) : selectedFile ? (
+            <div className="flex flex-col items-center justify-center h-48 text-center bg-white rounded-xl border border-gray-200">
+              <div className="w-10 h-10 border-2 border-brand-pink border-t-transparent rounded-full animate-spin mb-3" />
+              <h3 className="text-base font-semibold text-brand-text-primary">Processing Scan…</h3>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+              <VisionIcon className="w-10 h-10 text-slate-200 mb-3" />
+              <p className="text-sm font-semibold text-slate-500">Upload a scan above to begin</p>
             </div>
           )}
         </div>

@@ -384,264 +384,193 @@ const VisionWorkbench: React.FC = () => {
   };
 
   return (
-    <div className="grid lg:grid-cols-4 gap-6 h-full max-h-[calc(100vh-140px)]">
+    <div className="flex flex-col gap-5 h-full">
 
-      {/* ── Sidebar ── */}
-      <div className="lg:col-span-1 flex flex-col gap-6 overflow-hidden">
+      {/* ══ TOP: Upload zone + engine selector + queue ══ */}
+      <div className="bg-white rounded-2xl shadow-subtle border border-slate-200 p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        {/* Engine selector */}
-        <div className="bg-white p-5 rounded-2xl shadow-subtle border border-slate-200">
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Engine</label>
-            {isLoadingModels && <div className="w-3 h-3 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />}
-          </div>
-          <div className="flex flex-col gap-2 p-1 bg-slate-50 rounded-xl max-h-40 overflow-y-auto">
-            {availableModels.length === 0 && !isLoadingModels
-              ? <div className="py-6 text-center text-[10px] text-slate-400 font-bold px-4">
-                  No histology models detected.<br />Add alexnet.pth, efficient_net.pth, or yolov11.pth
-                </div>
-              : availableModels.map(m => (
-                  <button key={m} onClick={() => setActiveModel(m)}
-                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all text-left flex items-center justify-between ${activeModel === m ? 'bg-white text-brand-pink shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/50'}`}>
-                    <span>{getModelDisplayName(m)}</span>
-                    {activeModel === m && <div className="w-1.5 h-1.5 rounded-full bg-brand-pink animate-pulse" />}
-                  </button>
-                ))
-            }
-          </div>
-        </div>
-
-        {/* File queue */}
-        <div
-          className={`flex-grow bg-white rounded-2xl border-2 border-dashed flex flex-col overflow-hidden transition-all ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-slate-200'}`}
-          onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={e => { setIsDragging(false); onFileDrop(e); }}
-        >
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Clinical Queue</h3>
-            <span className="text-[10px] font-black bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full">{files.length}</span>
+          {/* Engine selector */}
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+              Active Engine
+              {isLoadingModels && <div className="w-3 h-3 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {availableModels.length === 0 && !isLoadingModels
+                ? <p className="text-[10px] text-slate-400 font-bold">No histology models detected. Add alexnet.pth, efficient_net.pth, or yolov11.pth</p>
+                : availableModels.map(m => (
+                    <button key={m} onClick={() => setActiveModel(m)}
+                      className={`py-1.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeModel === m ? 'bg-brand-pink text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                      {getModelDisplayName(m)}
+                      {activeModel === m && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                    </button>
+                  ))
+              }
+            </div>
           </div>
 
-          <div className="flex-grow overflow-y-auto p-2 space-y-2">
-            {files.length === 0
-              ? <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                    <UploadIcon className="w-6 h-6 text-slate-300" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                    Drag DICOM/Scans<br />to begin analysis
-                  </p>
-                </div>
-              : files.map(f => (
-                  <button key={f.id} onClick={() => setSelectedFileId(f.id)}
-                    className={`w-full flex items-center p-2 rounded-xl transition-all ${selectedFileId === f.id ? 'bg-pink-50 ring-1 ring-brand-pink' : 'hover:bg-slate-50'}`}>
-                    <div className="w-10 h-10 rounded-lg bg-slate-200 mr-3 flex-shrink-0 overflow-hidden border border-slate-100">
-                      <img src={f.previewUrl} className="w-full h-full object-cover" alt="" />
-                    </div>
-                    <div className="text-left overflow-hidden flex-grow">
-                      <p className="text-xs font-bold truncate text-slate-700">{f.name}</p>
-                      <span className={`text-[9px] font-black uppercase tracking-tighter ${f.status === 'Complete' ? 'text-green-600' : f.status === 'Failed' ? 'text-red-500' : 'text-slate-400'}`}>
-                        {f.status}
-                      </span>
-                    </div>
-                    {f.status === 'Analyzing' && <div className="w-2 h-2 border-2 border-brand-pink border-t-transparent rounded-full animate-spin flex-shrink-0" />}
-                  </button>
-                ))
-            }
-          </div>
-
-          <div className="p-4 bg-white border-t border-slate-100">
+          {/* Drop zone */}
+          <div
+            className={`border-2 border-dashed rounded-xl flex items-center justify-center gap-4 px-5 py-4 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-slate-200 hover:border-brand-pink/50'}`}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => { setIsDragging(false); onFileDrop(e); }}
+          >
             <input type="file" id="file-upload" className="hidden" multiple onChange={onFileDrop} />
-            <label htmlFor="file-upload"
-              className="flex items-center justify-center w-full py-3 bg-brand-pink text-white text-xs font-black uppercase tracking-widest rounded-xl cursor-pointer hover:bg-brand-pink-dark transition-all shadow-lg shadow-pink-100">
-              Import Scan
+            <label htmlFor="file-upload" className="flex items-center gap-3 cursor-pointer w-full">
+              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-5 h-5 text-brand-pink" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
+                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, TIFF, SVS supported</p>
+              </div>
             </label>
           </div>
+
+          {/* Scan queue */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clinical Queue</p>
+              <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{files.length}</span>
+            </div>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {files.length === 0
+                ? <p className="text-[10px] text-slate-400 text-center py-2">No scans uploaded yet</p>
+                : files.map(f => (
+                    <button key={f.id} onClick={() => setSelectedFileId(f.id)}
+                      className={`w-full flex items-center p-1.5 rounded-lg transition-all ${selectedFileId === f.id ? 'bg-pink-50 ring-1 ring-brand-pink' : 'hover:bg-slate-50'}`}>
+                      <div className="w-7 h-7 rounded-md bg-slate-200 mr-2 flex-shrink-0 overflow-hidden">
+                        <img src={f.previewUrl} className="w-full h-full object-cover" alt="" />
+                      </div>
+                      <p className="text-[10px] font-bold truncate text-slate-700 flex-grow text-left">{f.name}</p>
+                      <span className={`text-[9px] font-black uppercase ml-1 flex-shrink-0 ${f.status === 'Complete' ? 'text-green-600' : f.status === 'Failed' ? 'text-red-500' : 'text-slate-400'}`}>{f.status}</span>
+                      {f.status === 'Analyzing' && <div className="w-2 h-2 border-2 border-brand-pink border-t-transparent rounded-full animate-spin ml-1 flex-shrink-0" />}
+                    </button>
+                  ))
+              }
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── Main area ── */}
-      <div className="lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
+      {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
+      {selectedFile ? (
+        selectedFile.status === 'Complete' && selectedFile.analysis ? (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 flex-1 min-h-0">
 
-        {selectedFile ? (
-          <>
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl shadow-subtle border border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-white text-brand-pink rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
-                  <VisionIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-black text-slate-800 tracking-tight">{selectedFile.name}</h2>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                    Engine: {getModelDisplayName(activeModel) || 'OFFLINE'} · {selectedFile.type.toUpperCase()}
-                  </p>
+            {/* LEFT — Surgical Pathology Report */}
+            <div className="overflow-y-auto">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
+                <div className="flex items-center gap-2">
+                  {selectedFile.reportStatus === 'Generating' && (
+                    <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
+                  )}
+                  <button
+                    onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
+                    disabled={selectedFile.reportStatus === 'Generating'}
+                    className="px-3 py-1.5 bg-brand-pink text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#1e40af] transition-all">
+                    <DownloadIcon className="w-3 h-3" />
+                    Download PDF
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {selectedFile.reportStatus === 'Generating' && (
-                  <span className="text-[10px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Enhancing report…</span>
-                )}
-                <button onClick={() => window.print()}
-                  className="p-2 text-slate-400 hover:text-brand-pink hover:bg-pink-50 rounded-xl transition-all">
-                  <PrintIcon className="w-5 h-5" />
-                </button>
-                {selectedFile.status === 'Complete' && selectedFile.analysis && (
-                  <>
-                    <button
-                      onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
-                      className="p-2 text-slate-400 hover:text-brand-pink hover:bg-pink-50 rounded-xl transition-all"
-                      title="Regenerate Report">
-                      <DownloadIcon className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                      className="ml-1 flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
-                      <DownloadIcon className="w-4 h-4" />
-                      Download PDF
-                    </button>
-                  </>
-                )}
-              </div>
+              <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
             </div>
 
-            {/* Content */}
-            {selectedFile.status === 'Complete' && selectedFile.analysis ? (
-              <div className="space-y-8">
-                {/* ── MODEL RESULT PANEL ── */}
-                <div className="grid md:grid-cols-2 gap-8">
-                  {/* Scan image */}
-                  <div className="relative group">
-                    <div className="h-64 bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl flex items-center justify-center border-4 border-slate-50">
-                      <img src={selectedFile.previewUrl} className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity" alt="Scan" />
-                      {selectedFile.status === 'Analyzing' && (
-                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center">
-                          <div className="w-16 h-16 border-4 border-brand-pink border-t-transparent rounded-full animate-spin mb-6" />
-                          <p className="text-white text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Running Neural Pass…</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="absolute top-6 left-6 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest">Diagnostic View</div>
-                  </div>
+            {/* RIGHT — Model Results */}
+            <div className="overflow-y-auto flex flex-col gap-5">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
 
-                  {/* Result cards */}
-                  <div className="flex flex-col space-y-6">
-                    {/* Pathology + confidence */}
-                    <div className={`p-7 rounded-[2rem] border-2 ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-50/50 border-red-100' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-50/50 border-green-100' : 'bg-blue-50/50 border-blue-100'}`}>
-                      <div className="flex items-center justify-between mb-5">
-                        <span className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}>
-                          {selectedFile.analysis.pathology}
-                        </span>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Inference Confidence</p>
-                          <p className="text-3xl font-black text-slate-800 tracking-tighter">{(selectedFile.analysis.confidence * 100).toFixed(1)}%</p>
-                        </div>
-                      </div>
-                      <div className="h-2.5 w-full bg-white rounded-full overflow-hidden shadow-inner">
-                        <div className={`h-full transition-all duration-[1500ms] ease-out ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}
-                          style={{ width: `${selectedFile.analysis.confidence * 100}%` }} />
-                      </div>
-                    </div>
+              {/* Scan image */}
+              <div className="relative group">
+                <div className="h-60 bg-slate-900 rounded-2xl overflow-hidden shadow-xl flex items-center justify-center border-4 border-slate-50">
+                  <img src={selectedFile.previewUrl} className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                </div>
+                <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest">Diagnostic View</div>
+              </div>
 
-                    {/* Neural insight */}
-                    <div className="p-7 bg-slate-50 rounded-[2rem] border border-slate-200">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-brand-pink/10 flex items-center justify-center">
-                          <InfoIcon className="w-4 h-4 text-brand-pink" />
-                        </div>
-                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Neural Insight</h4>
-                      </div>
-                      <p className="text-sm text-slate-600 leading-relaxed font-medium italic">"{selectedFile.analysis.insight}"</p>
-                    </div>
-
-                    {/* Engine + confirm */}
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
-                          <ModelIcon className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Engine</p>
-                          <p className="text-xs font-bold text-slate-700">{selectedFile.analysis.modelUsed} — STABLE-PYTORCH-V2</p>
-                        </div>
-                      </div>
-                      <button className="px-8 py-3 bg-slate-900 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-black transition-all shadow-xl">
-                        Confirm Diagnosis
-                      </button>
-                    </div>
+              {/* Pathology badge + confidence */}
+              <div className={`p-5 rounded-2xl border-2 ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-50/50 border-red-100' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-50/50 border-green-100' : 'bg-blue-50/50 border-blue-100'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}>
+                    {selectedFile.analysis.pathology}
+                  </span>
+                  <div className="text-right">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Confidence</p>
+                    <p className="text-2xl font-black text-slate-800">{(selectedFile.analysis.confidence * 100).toFixed(1)}%</p>
                   </div>
                 </div>
-
-                {/* ── SURGICAL PATHOLOGY REPORT BELOW ── */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Surgical Pathology Report</h3>
-                    <div className="flex items-center gap-3">
-                      {selectedFile.reportStatus === 'Generating' && (
-                        <span className="text-[10px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating report…</span>
-                      )}
-                      <button
-                        onClick={() => selectedFile.analysis && fetchNLPEnrichment(selectedFile.id, selectedFile.name, selectedFile.analysis)}
-                        disabled={selectedFile.reportStatus === 'Generating'}
-                        className="px-4 py-2 bg-brand-pink text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-pink-dark disabled:opacity-50 transition-all">
-                        Regenerate Report
-                      </button>
-                      <button
-                        onClick={() => downloadReportAsPDF('pathology-report', `UniHisto-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#1e40af] transition-all shadow-md">
-                        <DownloadIcon className="w-4 h-4" />
-                        Download PDF
-                      </button>
-                    </div>
-                  </div>
-                  <PathologyReport file={selectedFile} analysis={selectedFile.analysis} />
+                <div className="h-2 w-full bg-white rounded-full overflow-hidden shadow-inner">
+                  <div className={`h-full transition-all duration-[1500ms] ease-out ${selectedFile.analysis.pathology === 'Malignant' ? 'bg-red-500' : selectedFile.analysis.pathology === 'Benign' ? 'bg-green-500' : 'bg-blue-500'}`}
+                    style={{ width: `${selectedFile.analysis.confidence * 100}%` }} />
                 </div>
               </div>
 
-            ) : selectedFile.status === 'Failed' ? (
-              <div className="flex-grow flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 text-center p-12">
-                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6">
-                  <InfoIcon className="w-10 h-10 text-red-500" />
+              {/* Neural insight */}
+              <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-full bg-brand-pink/10 flex items-center justify-center">
+                    <InfoIcon className="w-3.5 h-3.5 text-brand-pink" />
+                  </div>
+                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Neural Insight</h4>
                 </div>
-                <h3 className="text-xl font-black text-slate-800 mb-2">Neural Link Severed</h3>
-                <p className="text-slate-500 text-sm max-w-xs mb-8">{selectedFile.errorMessage}</p>
-                <button
-                  onClick={() => handleAnalysis(selectedFile.id, new File([], selectedFile.name), activeModel)}
-                  className="px-8 py-3 border-2 border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-brand-pink hover:text-brand-pink transition-all">
-                  Retry Inference
+                <p className="text-sm text-slate-600 leading-relaxed font-medium italic">"{selectedFile.analysis.insight}"</p>
+              </div>
+
+              {/* Engine info */}
+              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white">
+                    <ModelIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Engine</p>
+                    <p className="text-xs font-bold text-slate-700">{selectedFile.analysis.modelUsed}</p>
+                  </div>
+                </div>
+                <button className="px-5 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black transition-all">
+                  Confirm Diagnosis
                 </button>
               </div>
-            ) : (
-              <div className="flex-grow flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 text-center p-20">
-                <div className="relative mb-8">
-                  <div className="w-32 h-32 border-2 border-brand-pink/20 rounded-full animate-[spin_3s_linear_infinite]" />
-                  <div className="w-32 h-32 border-t-2 border-brand-pink rounded-full animate-spin absolute inset-0" />
-                  <VisionIcon className="w-10 h-10 text-brand-pink absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 tracking-tight">Running Neural Analysis</h3>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Processing histology image…</p>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="flex-grow flex flex-col items-center justify-center bg-slate-50 rounded-[3rem] border-4 border-dashed border-slate-100 text-center p-20">
-            <div className="w-32 h-32 bg-white rounded-[2.5rem] shadow-xl flex items-center justify-center mb-10 border border-slate-100 rotate-3 hover:rotate-0 transition-transform">
-              <VisionIcon className="w-14 h-14 text-slate-200" />
             </div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tighter mb-4">Neural Workbench Ready</h2>
-            <p className="text-slate-400 max-w-md text-sm leading-relaxed">
-              Import a histology scan to generate an AI Surgical Pathology Report using AlexNet, EfficientNet, or YOLO V11.
-            </p>
-            {availableModels.length === 0 && !isLoadingModels && (
-              <div className="mt-8 p-4 bg-red-50 border border-red-100 rounded-2xl max-w-xs">
-                <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">System Warning</p>
-                <p className="text-[11px] text-red-500 font-medium">Add alexnet.pth, efficient_net.pth, or yolov11.pth to /backend/models.</p>
-              </div>
-            )}
           </div>
-        )}
-      </div>
+        ) : selectedFile.status === 'Failed' ? (
+          <div className="flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 text-center p-12 flex-1">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
+              <InfoIcon className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 mb-2">Analysis Failed</h3>
+            <p className="text-slate-500 text-sm max-w-xs mb-6">{selectedFile.errorMessage}</p>
+            <button onClick={() => handleAnalysis(selectedFile.id, new File([], selectedFile.name), activeModel)}
+              className="px-6 py-2.5 border-2 border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest hover:border-brand-pink hover:text-brand-pink transition-all">
+              Retry Inference
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 text-center p-16 flex-1">
+            <div className="relative mb-6">
+              <div className="w-24 h-24 border-2 border-brand-pink/20 rounded-full animate-[spin_3s_linear_infinite]" />
+              <div className="w-24 h-24 border-t-2 border-brand-pink rounded-full animate-spin absolute inset-0" />
+              <VisionIcon className="w-8 h-8 text-brand-pink absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+            </div>
+            <h3 className="text-base font-black text-slate-800">Running Neural Analysis…</h3>
+          </div>
+        )
+      ) : (
+        <div className="flex flex-col items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center p-16 flex-1">
+          <VisionIcon className="w-12 h-12 text-slate-200 mb-4" />
+          <h2 className="text-xl font-black text-slate-700 mb-2">Neural Workbench Ready</h2>
+          <p className="text-slate-400 text-sm">Upload a histology scan above to begin analysis and generate a report.</p>
+        </div>
+      )}
     </div>
   );
 };

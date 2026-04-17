@@ -314,197 +314,110 @@ const UploadScans: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 h-full">
-      <div className="relative overflow-hidden bg-gradient-to-br from-white via-pink-50 to-fuchsia-50 p-6 rounded-2xl shadow-subtle border border-pink-100">
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-brand-pink/20 rounded-full blur-2xl"></div>
-        <div className="absolute -bottom-12 -left-10 w-32 h-32 bg-fuchsia-200/40 rounded-full blur-2xl"></div>
-        <div className="relative">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900">UltrasoundAnalysis</h1>
-          <p className="text-sm md:text-base text-slate-600 mt-2">Deploying multimodal models for accurate lesion classification.</p>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5 h-full">
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+      {/* ══ TOP: Upload + queue ══ */}
+      <div className="bg-white rounded-2xl shadow-subtle border border-gray-200 p-5">
         {(backendError || (backendModels && backendModels.length === 0)) && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 p-4 rounded-lg">
-            <p className="text-sm font-semibold">Models Missing</p>
-            <p className="text-xs mt-1">
-              {backendError
-                ? `Backend check failed: ${backendError}`
-                : 'No backend models are loaded. Kindly add your models to backend/models and restart the server.'}
-            </p>
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-900 p-3 rounded-lg text-xs">
+            <span className="font-bold">Models Missing: </span>
+            {backendError ? `Backend check failed: ${backendError}` : 'No backend models loaded. Add your models to backend/models and restart.'}
           </div>
         )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        <div 
-          onDragEnter={(e) => handleDragEvents(e, true)}
-          onDragLeave={(e) => handleDragEvents(e, false)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          className={`relative flex-grow flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-subtle border-2 border-dashed transition-all duration-300 ${isDragging ? 'border-brand-blue bg-blue-50' : 'border-gray-200'}`}
-        >
-          <input type="file" id="vision-upload" className="hidden" multiple onChange={(e) => e.target.files && handleFileDrop(Array.from(e.target.files))} />
-          <label htmlFor="vision-upload" className="text-center cursor-pointer">
-            <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center">
-              <UploadIcon className="w-8 h-8 text-gray-400" />
-            </div>
-            <p className="font-semibold text-brand-text-primary mt-4">Drop Ultrasound Scan Here</p>
-            <p className="text-xs text-brand-text-secondary mt-1">PNG, JPG, DICOM (Max 500MB)</p>
-          </label>
-        </div>
-
-        <div className="flex-shrink-0 bg-white p-4 rounded-lg shadow-subtle border border-gray-200">
-          <div className="flex justify-between items-center mb-3 px-2">
-            <h3 className="font-semibold text-brand-text-primary text-sm">Scan Queue</h3>
-            <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{files.length} Files</span>
+          {/* Drop zone */}
+          <div
+            onDragEnter={e => handleDragEvents(e, true)}
+            onDragLeave={e => handleDragEvents(e, false)}
+            onDragOver={e => e.preventDefault()}
+            onDrop={onDrop}
+            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-5 py-4 transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+          >
+            <input type="file" id="vision-upload" className="hidden" multiple onChange={e => e.target.files && handleFileDrop(Array.from(e.target.files))} />
+            <label htmlFor="vision-upload" className="flex items-center gap-3 cursor-pointer w-full">
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <UploadIcon className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">Drop Ultrasound Scan or <span className="text-blue-500 underline">Browse</span></p>
+                <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, DICOM — Max 500MB</p>
+              </div>
+            </label>
           </div>
-          <ul className="space-y-2 max-h-48 overflow-y-auto">
-            {files.map(file => (
-              <li 
-                key={file.id} 
-                onClick={() => handleFileSelect(file)}
-                className={`flex items-center p-2 rounded-md cursor-pointer transition-colors ${selectedFile?.id === file.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-              >
-                {/* Fix: Use previewUrl instead of imageUrl */}
-                <img src={file.previewUrl} alt={file.name} className="w-10 h-10 rounded-md object-cover mr-3"/>
-                <div className="flex-grow">
-                  <p className="text-sm font-medium text-brand-text-primary truncate">{file.name}</p>
-                  <p className="text-xs text-brand-text-secondary">{file.size}</p>
-                </div>
-                {file.status === 'Analyzing' && <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>}
-                {file.status === 'Complete' && file.analysis && (
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getPathologyBadgeClass(file.analysis.pathology)}`}>
-                    {file.analysis.pathology.toUpperCase()}
-                  </span>
-                )}
-                 {file.status === 'Failed' && (
-                    <div className="relative group flex items-center cursor-help">
-                        <span className="text-xs font-bold text-red-500">Failed</span>
-                        <InfoIcon className="w-4 h-4 text-red-500 ml-1" />
-                        <div className="absolute bottom-full right-0 mb-2 w-max max-w-xs p-2 text-xs text-white bg-gray-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                            {file.errorMessage || 'An unknown error occurred.'}
-                        </div>
-                    </div>
-                 )}
-              </li>
-            ))}
-          </ul>
+
+          {/* Queue */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scan Queue</p>
+              <span className="text-[10px] font-black bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{files.length} Files</span>
+            </div>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {files.length === 0
+                ? <p className="text-[10px] text-slate-400 text-center py-2">No scans uploaded yet</p>
+                : files.map(file => (
+                    <button key={file.id} onClick={() => handleFileSelect(file)}
+                      className={`w-full flex items-center p-1.5 rounded-lg transition-colors ${selectedFile?.id === file.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                      <img src={file.previewUrl} alt={file.name} className="w-7 h-7 rounded-md object-cover mr-2 flex-shrink-0" />
+                      <p className="text-[10px] font-bold text-brand-text-primary truncate flex-grow text-left">{file.name}</p>
+                      {file.status === 'Analyzing' && <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin ml-1" />}
+                      {file.status === 'Complete' && file.analysis && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${getPathologyBadgeClass(file.analysis.pathology)}`}>
+                          {file.analysis.pathology.toUpperCase()}
+                        </span>
+                      )}
+                      {file.status === 'Failed' && <span className="text-[9px] font-bold text-red-500 ml-1">Failed</span>}
+                    </button>
+                  ))
+              }
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Right Column */}
-      <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-subtle border border-gray-200 overflow-y-auto">
-        {selectedFile ? (
-            <>
-            <div className="flex justify-between items-start">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-lg flex items-center justify-center"><VisionIcon className="w-6 h-6"/></div>
-                    <div>
-                        <h2 className="text-xl font-bold text-brand-text-primary">Vision Diagnostic Analysis</h2>
-                        <div className="flex items-center gap-4 text-xs mt-1 text-brand-text-secondary">
-                          <span className="flex items-center gap-1.5"><ModelIcon className="w-3.5 h-3.5"/> MODELS: {selectedFile.analysis?.modelUsed || 'BEST_MODEL + BEST_SEG'}</span>
-                          <span className="flex items-center gap-1.5 text-green-600 font-medium"><LiveIcon className="w-3.5 h-3.5"/> LIVE INFERENCE</span>
-                        </div>
-                        {selectedFile.analysis && (
-                          <div className="mt-2 text-[11px] text-brand-text-secondary space-y-1">
-                            <p>Classification Engine: {selectedFile.analysis.classificationEngine || 'N/A'}</p>
-                            <p>Segmentation Engine: {selectedFile.analysis.segmentationEngine || 'N/A'}</p>
-                          </div>
-                        )}
-                    </div>
-                </div>
-                {selectedFile.status === 'Complete' && selectedFile.analysis &&
-                <div className="text-right">
-                    <p className="text-xs text-brand-text-secondary font-semibold">PATHOLOGY</p>
-                    <p className={`text-lg font-bold ${getPathologyTextClass(selectedFile.analysis.pathology)}`}>{selectedFile.analysis.pathology.toUpperCase()}</p>
-                </div>
-                }
-            </div>
+      {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
+      <div className="flex-1 min-h-0">
+        <div className="h-full">
+        {selectedFile && selectedFile.status === 'Complete' && selectedFile.analysis ? (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 h-full">
 
-            {selectedFile.status === 'Complete' && selectedFile.analysis ? (
-            <>
-            <div className="grid grid-cols-2 gap-6 my-6">
-                <div className="flex flex-col">
-                    <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center">ORIGINAL SCAN</p>
-                    <div className="h-52 bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
-                        <img src={selectedFile.previewUrl} alt="Original Scan" className="max-w-full max-h-full object-contain"/>
-                    </div>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-xs font-semibold text-brand-text-secondary mb-2 text-center">SEGMENTATION OVERLAY</p>
-                  <div className="h-52 bg-gray-900 rounded-lg flex items-center justify-center p-2 relative overflow-hidden">
-                    <img src={selectedFile.previewUrl} alt="Scan" className="max-w-full max-h-full object-contain" />
-                    {selectedFile.analysis?.segmentationMask ? (
-                      <img src={selectedFile.analysis.segmentationMask} alt="Segmentation Overlay" className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none" style={{mixBlendMode: 'screen'}} />
-                    ) : null}
-                  </div>
-                </div>
-            </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <AnalysisStatCard title="AI CONFIDENCE" value={`${(selectedFile.analysis.confidence * 100).toFixed(1)}%`} />
-                  <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm^2` : 'N/A'} />
-                  <AnalysisStatCard title="TUMOUR PIXELS" value={selectedFile.analysis.pixels != null ? `${selectedFile.analysis.pixels} PX` : 'N/A'} />
-                </div>
-
-            <div className="mt-6 bg-blue-50 border-l-4 border-brand-blue text-brand-text-primary p-4 rounded-r-lg">
-                <p className="font-semibold text-sm">Radiologist Insight:</p>
-                {/* Fix: Use insight property as defined in AnalysisResult */}
-                <p className="text-sm mt-1">{selectedFile.analysis.insight}</p>
-            </div>
-
-            {/* ── IMAGING CENTER REPORT ── */}
-            <div className="mt-6">
+            {/* LEFT — Radiology Report */}
+            <div className="overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Radiology Report</h3>
-                <div className="flex items-center gap-3">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Radiology Report</h3>
+                <div className="flex items-center gap-2">
                   {selectedFile.reportStatus === 'Generating' && (
-                    <span className="text-[10px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
+                    <span className="text-[9px] font-bold text-brand-pink animate-pulse uppercase tracking-widest">Generating…</span>
                   )}
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => void generateSuggestiveReport(selectedFile, selectedFile.analysis!)}
                     disabled={selectedFile.reportStatus === 'Generating'}
-                    className="bg-brand-pink text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-brand-pink-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate Report'}
+                    className="bg-brand-pink text-white text-[9px] font-bold px-3 py-1.5 rounded-lg hover:bg-brand-pink-dark disabled:opacity-60 transition-colors">
+                    {selectedFile.reportStatus === 'Generating' ? 'Generating...' : 'Regenerate'}
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => downloadReportAsPDF('us-report', `Ultrasound-Report-${selectedFile.name.replace(/\.[^/.]+$/, '')}`)}
-                    className="flex items-center gap-2 bg-[#1e3a5f] text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-[#1e40af] transition-colors shadow-md"
-                  >
-                    <DownloadIcon className="w-4 h-4" />
+                    className="flex items-center gap-1.5 bg-[#1e3a5f] text-white text-[9px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#1e40af] transition-colors">
+                    <DownloadIcon className="w-3 h-3" />
                     Download PDF
                   </button>
                 </div>
               </div>
-
-              {/* Report document — always renders once analysis is complete */}
+              {/* Report document */}
               {(() => {
                 const a = selectedFile.analysis!;
                 const now = new Date();
                 const reportDate = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
                 const reportTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                 const reportId = `US-${Date.now().toString(36).toUpperCase()}`;
-
                 const isMalignant = a.pathology === 'Malignant';
                 const isBenign    = a.pathology === 'Benign';
                 const isNormal    = a.pathology === 'Normal';
-
-                const accentColor  = isMalignant ? '#1e3a5f' : isBenign ? '#1e3a5f' : '#1e3a5f';
                 const diagBadgeBg  = isMalignant ? '#dc2626' : isBenign ? '#16a34a' : '#2563eb';
                 const confPct      = a.confidence * 100;
                 const confBarColor = confPct < 40 ? '#dc2626' : confPct <= 80 ? '#f59e0b' : '#16a34a';
                 const confLabel    = confPct < 40 ? 'Low' : confPct <= 80 ? 'Moderate' : 'High';
-
-                // Build structured key findings as bullet points
-                const rawFindings = selectedFile.suggestiveReport
-                  ? selectedFile.suggestiveReport.replace(/\*\*/g, '').trim()
-                  : '';
-
+                const rawFindings = selectedFile.suggestiveReport ? selectedFile.suggestiveReport.replace(/\*\*/g, '').trim() : '';
                 const keyFindings: string[] = [
                   `Ultrasound imaging demonstrates features consistent with a <strong>${a.pathology}</strong> lesion pattern.`,
                   a.insight ? a.insight : null,
@@ -516,248 +429,202 @@ const UploadScans: React.FC = () => {
                   a.classificationEngine ? `Classification Engine: <strong>${a.classificationEngine}</strong>` : null,
                   a.segmentationEngine   ? `Segmentation Engine: <strong>${a.segmentationEngine}</strong>`   : null,
                 ].filter(Boolean) as string[];
-
-                // If worker returned enriched text, prepend it as the first bullet
                 if (rawFindings) keyFindings.unshift(rawFindings.split('.')[0].trim() + '.');
-
                 const impression = isMalignant
-                  ? `Imaging findings are suspicious for malignancy. Urgent clinical correlation, further diagnostic workup, and core needle biopsy are strongly recommended. Multidisciplinary oncology review advised.`
+                  ? `Imaging findings are suspicious for malignancy. Urgent clinical correlation, further diagnostic workup, and core needle biopsy are strongly recommended.`
                   : isBenign
-                  ? `Imaging findings are consistent with a benign lesion. Routine clinical follow-up and interval ultrasound in 6 months is advised. No immediate intervention required.`
+                  ? `Imaging findings are consistent with a benign lesion. Routine clinical follow-up and interval ultrasound in 6 months is advised.`
                   : isNormal
-                  ? `No significant pathological abnormality identified on this ultrasound examination. Routine follow-up as clinically indicated.`
-                  : `Imaging findings are inconclusive. Correlation with clinical history, laboratory data, and additional cross-sectional imaging (MRI/CT) is recommended.`;
-
+                  ? `No significant pathological abnormality identified on this ultrasound examination.`
+                  : `Imaging findings are inconclusive. Correlation with clinical history and additional imaging is recommended.`;
                 const recommendations = isMalignant
-                  ? ['Urgent referral to breast oncology / surgical oncology', 'Core needle biopsy for tissue diagnosis', 'Staging workup — MRI breast, CT chest/abdomen/pelvis', 'Multidisciplinary tumor board review', 'Patient counselling and support']
+                  ? ['Urgent referral to breast oncology / surgical oncology', 'Core needle biopsy for tissue diagnosis', 'Staging workup — MRI, CT chest/abdomen/pelvis', 'Multidisciplinary tumor board review']
                   : isBenign
-                  ? ['Routine follow-up ultrasound in 6 months', 'Clinical correlation with physical examination', 'Mammography if not recently performed', 'Re-evaluate if symptoms change']
+                  ? ['Routine follow-up ultrasound in 6 months', 'Clinical correlation with physical examination', 'Mammography if not recently performed']
                   : isNormal
                   ? ['Routine annual screening as clinically appropriate', 'Clinical follow-up if symptoms persist']
-                  : ['Additional cross-sectional imaging (MRI/CT)', 'Clinical correlation with history and labs', 'Short-interval follow-up ultrasound in 3 months'];
+                  : ['Additional cross-sectional imaging (MRI/CT)', 'Short-interval follow-up ultrasound in 3 months'];
 
                 return (
                   <div className="bg-white border border-gray-200 shadow-2xl font-sans text-[13px] text-gray-900 rounded-lg overflow-hidden" id="us-report">
-
-                    {/* ══ CLINIC HEADER ══ */}
                     <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)' }} className="px-6 py-5 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                          <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="#1e3a5f" strokeWidth="1.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                          </svg>
+                          <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="#1e3a5f" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" /></svg>
                         </div>
                         <div>
-                          <p className="text-white font-black text-[1.2rem] tracking-wide">OncoScanAI Imaging Center</p>
+                          <p className="text-white font-black text-[1.1rem] tracking-wide">OncoScanAI Imaging Center</p>
                           <p className="text-blue-200 text-[11px] mt-0.5">AI-Assisted Radiology & Diagnostic Imaging</p>
-                          <div className="flex gap-3 mt-1">
-                            <span className="text-[10px] text-blue-300">📞 +92-XXX-XXXXXXX</span>
-                            <span className="text-[10px] text-blue-300">🌐 oncoscanai.health</span>
-                          </div>
+                          <div className="flex gap-3 mt-1"><span className="text-[10px] text-blue-300">📞 +92-XXX-XXXXXXX</span><span className="text-[10px] text-blue-300">🌐 oncoscanai.health</span></div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="bg-white/20 backdrop-blur rounded-lg px-4 py-2 text-center">
-                          <p className="text-white font-black text-[11px] uppercase tracking-widest">24/7 Services</p>
-                          <p className="text-blue-200 text-[10px] mt-0.5">✉ reports@oncoscanai.health</p>
-                        </div>
-                      </div>
+                      <div className="bg-white/20 backdrop-blur rounded-lg px-4 py-2 text-center"><p className="text-white font-black text-[11px] uppercase tracking-widest">24/7 Services</p><p className="text-blue-200 text-[10px] mt-0.5">✉ reports@oncoscanai.health</p></div>
                     </div>
-
-                    {/* ══ PATIENT & REPORT INFO ══ */}
-                    <div className="bg-slate-50 border-b border-gray-200 px-6 py-3">
-                      <div className="grid grid-cols-3 gap-x-8 gap-y-1 text-[11.5px]">
-                        <div><span className="text-gray-500 font-semibold">Patient File:</span> <span className="font-bold text-gray-800">{selectedFile.name}</span></div>
-                        <div><span className="text-gray-500 font-semibold">Report ID:</span> <span className="font-bold text-gray-800">{reportId}</span></div>
-                        <div><span className="text-gray-500 font-semibold">Date / Time:</span> <span className="font-bold text-gray-800">{reportDate} · {reportTime}</span></div>
-                        <div><span className="text-gray-500 font-semibold">Modality:</span> <span className="font-bold text-gray-800">Ultrasound</span></div>
-                        <div><span className="text-gray-500 font-semibold">AI Engine:</span> <span className="font-bold text-gray-800">{a.modelUsed || 'OncoScanAI Best Model'}</span></div>
-                        <div><span className="text-gray-500 font-semibold">Result:</span> <span className="font-black" style={{ color: diagBadgeBg }}>{a.pathology.toUpperCase()}</span></div>
-                      </div>
+                    <div className="bg-slate-50 border-b border-gray-200 px-6 py-3 grid grid-cols-3 gap-x-8 gap-y-1 text-[11.5px]">
+                      <div><span className="text-gray-500 font-semibold">Patient File:</span> <span className="font-bold text-gray-800">{selectedFile.name}</span></div>
+                      <div><span className="text-gray-500 font-semibold">Report ID:</span> <span className="font-bold text-gray-800">{reportId}</span></div>
+                      <div><span className="text-gray-500 font-semibold">Date / Time:</span> <span className="font-bold text-gray-800">{reportDate} · {reportTime}</span></div>
+                      <div><span className="text-gray-500 font-semibold">Modality:</span> <span className="font-bold text-gray-800">Ultrasound</span></div>
+                      <div><span className="text-gray-500 font-semibold">AI Engine:</span> <span className="font-bold text-gray-800">{a.modelUsed || 'OncoScanAI Best Model'}</span></div>
+                      <div><span className="text-gray-500 font-semibold">Result:</span> <span className="font-black" style={{ color: diagBadgeBg }}>{a.pathology.toUpperCase()}</span></div>
                     </div>
-
-                    {/* ══ REPORT TITLE ══ */}
                     <div className="text-center py-4 border-b border-gray-200 bg-white">
-                      <h2 className="text-[1.3rem] font-black tracking-widest uppercase" style={{ color: '#1e3a5f' }}>Ultrasound Analysis Report</h2>
-                      <p className="text-[10.5px] text-gray-400 mt-0.5 tracking-wide">AI-Assisted Lesion Detection & Segmentation · OncoScanAI Diagnostic Platform</p>
+                      <h2 className="text-[1.2rem] font-black tracking-widest uppercase" style={{ color: '#1e3a5f' }}>Ultrasound Analysis Report</h2>
+                      <p className="text-[10px] text-gray-400 mt-0.5">AI-Assisted Lesion Detection & Segmentation · OncoScanAI</p>
                     </div>
-
-                    <div className="px-6 pt-5 pb-6 space-y-6">
-
-                      {/* ══ DIAGNOSIS + CONFIDENCE ══ */}
+                    <div className="px-6 pt-5 pb-6 space-y-5">
                       <div className="flex items-center gap-5 p-4 rounded-xl border-2" style={{ borderColor: diagBadgeBg, backgroundColor: `${diagBadgeBg}08` }}>
                         <div className="flex-shrink-0 flex flex-col items-center">
-                          <div className="px-6 py-3 rounded-lg text-white font-black text-[15px] uppercase tracking-widest shadow-md" style={{ backgroundColor: diagBadgeBg }}>
-                            {a.pathology}
-                          </div>
+                          <div className="px-5 py-2 rounded-lg text-white font-black text-[13px] uppercase tracking-widest shadow-md" style={{ backgroundColor: diagBadgeBg }}>{a.pathology}</div>
                           <p className="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">AI Diagnosis</p>
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[12px] font-bold text-gray-700 uppercase tracking-wide">AI Confidence Level</span>
-                            <span className="text-[13px] font-black" style={{ color: confBarColor }}>{confPct.toFixed(1)}% — {confLabel}</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">AI Confidence</span>
+                            <span className="text-[12px] font-black" style={{ color: confBarColor }}>{confPct.toFixed(1)}% — {confLabel}</span>
                           </div>
                           <div className="h-4 w-64 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-                            <div className="h-full rounded-full transition-all duration-1000 ease-out shadow-sm"
-                              style={{ width: `${confPct}%`, backgroundColor: confBarColor }} />
+                            <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${confPct}%`, backgroundColor: confBarColor }} />
                           </div>
-                          <div className="flex justify-between mt-1 text-[9px] text-gray-400">
-                            <span>0%</span><span>Low</span><span>Moderate</span><span>High</span><span>100%</span>
-                          </div>
+                          <div className="flex justify-between mt-1 text-[9px] text-gray-400"><span>0%</span><span>Low</span><span>Moderate</span><span>High</span><span>100%</span></div>
                         </div>
                       </div>
-
-                      {/* ══ SCAN IMAGES — FULL DISPLAY ══ */}
                       {selectedFile.previewUrl && (
                         <div>
                           <p className="text-[11px] font-black uppercase tracking-widest mb-3" style={{ color: '#1e3a5f' }}>Scan Images</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            {/* Original — full image, no crop */}
+                          <div className="grid grid-cols-2 gap-3">
                             <div className="flex flex-col">
-                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '200px' }}>
-                                <img
-                                  src={selectedFile.previewUrl}
-                                  alt="Original Ultrasound Scan"
-                                  className="w-full h-full object-contain"
-                                  style={{ maxHeight: '260px' }}
-                                />
+                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '160px' }}>
+                                <img src={selectedFile.previewUrl} alt="Original" className="w-full h-full object-contain" style={{ maxHeight: '200px' }} />
                               </div>
-                              <div className="mt-2 text-center">
-                                <p className="text-[11px] font-bold text-gray-700">Original Ultrasound Scan</p>
-                                <p className="text-[10px] text-gray-400">As submitted for analysis</p>
-                              </div>
+                              <p className="text-[10px] font-bold text-gray-700 mt-1 text-center">Original Scan</p>
                             </div>
-                            {/* Segmentation overlay — full image */}
                             <div className="flex flex-col">
-                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center relative" style={{ minHeight: '200px' }}>
-                                <img
-                                  src={selectedFile.previewUrl}
-                                  alt="AI Segmentation"
-                                  className="w-full h-full object-contain"
-                                  style={{ maxHeight: '260px', filter: 'contrast(1.15) brightness(0.95)' }}
-                                />
-                                {a.segmentationMask && (
-                                  <img src={a.segmentationMask} alt="Mask Overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
-                                )}
-                                {/* AI annotation badge */}
-                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded px-2 py-0.5">
-                                  <span className="text-[9px] font-black text-white uppercase tracking-widest">AI Segmentation</span>
-                                </div>
+                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center relative" style={{ minHeight: '160px' }}>
+                                <img src={selectedFile.previewUrl} alt="Segmentation" className="w-full h-full object-contain" style={{ maxHeight: '200px', filter: 'contrast(1.15) brightness(0.95)' }} />
+                                {a.segmentationMask && <img src={a.segmentationMask} alt="Mask" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />}
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded px-2 py-0.5"><span className="text-[9px] font-black text-white uppercase tracking-widest">AI Segmentation</span></div>
                               </div>
-                              <div className="mt-2 text-center">
-                                <p className="text-[11px] font-bold text-gray-700">Segmentation Overlay</p>
-                                <p className="text-[10px] text-gray-400">AI-detected region of interest</p>
-                              </div>
+                              <p className="text-[10px] font-bold text-gray-700 mt-1 text-center">Segmentation Overlay</p>
                             </div>
                           </div>
                         </div>
                       )}
-
-                      {/* ══ QUANTITATIVE METRICS ══ */}
                       <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { label: 'AI Confidence', value: `${confPct.toFixed(1)}%`, icon: '🎯', color: confBarColor },
-                          { label: 'Lesion Area',   value: a.area   != null ? `${a.area.toFixed(2)} mm²`  : 'N/A', icon: '📐', color: '#1e3a5f' },
-                          { label: 'Lesion Pixels', value: a.pixels != null ? `${a.pixels} px`            : 'N/A', icon: '🔬', color: '#1e3a5f' },
-                        ].map(c => (
-                          <div key={c.label} className="rounded-xl border border-gray-200 p-4 bg-gradient-to-br from-slate-50 to-white shadow-sm">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-base">{c.icon}</span>
-                              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{c.label}</p>
-                            </div>
-                            <p className="text-[1.3rem] font-black mt-1" style={{ color: c.color }}>{c.value}</p>
+                        {[{ label: 'AI Confidence', value: `${confPct.toFixed(1)}%`, icon: '🎯', color: confBarColor }, { label: 'Lesion Area', value: a.area != null ? `${a.area.toFixed(2)} mm²` : 'N/A', icon: '📐', color: '#1e3a5f' }, { label: 'Lesion Pixels', value: a.pixels != null ? `${a.pixels} px` : 'N/A', icon: '🔬', color: '#1e3a5f' }].map(c => (
+                          <div key={c.label} className="rounded-xl border border-gray-200 p-3 bg-gradient-to-br from-slate-50 to-white shadow-sm">
+                            <div className="flex items-center gap-1.5 mb-1"><span>{c.icon}</span><p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{c.label}</p></div>
+                            <p className="text-[1.1rem] font-black mt-0.5" style={{ color: c.color }}>{c.value}</p>
                           </div>
                         ))}
                       </div>
-
-                      {/* ══ KEY FINDINGS ══ */}
-                      <div className="rounded-xl border-l-4 border-[#1e3a5f] bg-blue-50/50 p-5">
+                      <div className="rounded-xl border-l-4 border-[#1e3a5f] bg-blue-50/50 p-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <p className="font-black uppercase text-[12px] tracking-widest text-[#1e3a5f]">Key Findings</p>
-                          {selectedFile.reportStatus === 'Generating' && (
-                            <span className="flex items-center gap-1 text-[10px] text-brand-pink font-bold animate-pulse ml-2">
-                              <span className="w-2 h-2 rounded-full bg-brand-pink inline-block animate-ping" />
-                              Enhancing with AI…
-                            </span>
-                          )}
+                          <p className="font-black uppercase text-[11px] tracking-widest text-[#1e3a5f]">Key Findings</p>
+                          {selectedFile.reportStatus === 'Generating' && <span className="flex items-center gap-1 text-[9px] text-brand-pink font-bold animate-pulse ml-2"><span className="w-1.5 h-1.5 rounded-full bg-brand-pink inline-block animate-ping" />Enhancing…</span>}
                         </div>
-                        <ul className="space-y-2">
+                        <ul className="space-y-1.5">
                           {keyFindings.map((point, i) => (
-                            <li key={i} className="flex items-start gap-3">
-                              <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black mt-0.5" style={{ backgroundColor: '#1e3a5f' }}>{i + 1}</span>
-                              <span className="text-[12.5px] leading-6 text-gray-800" dangerouslySetInnerHTML={{ __html: point }} />
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-black mt-0.5" style={{ backgroundColor: '#1e3a5f' }}>{i + 1}</span>
+                              <span className="text-[12px] leading-5 text-gray-800" dangerouslySetInnerHTML={{ __html: point }} />
                             </li>
                           ))}
                         </ul>
                       </div>
-
-                      {/* ══ IMPRESSION ══ */}
-                      <div className="rounded-xl border border-gray-200 p-5 bg-white shadow-sm">
-                        <p className="font-black uppercase text-[12px] tracking-widest mb-2" style={{ color: '#1e3a5f' }}>Radiologist Impression</p>
-                        <p className="text-[13px] leading-7 text-gray-800 font-medium">{impression}</p>
+                      <div className="rounded-xl border border-gray-200 p-4 bg-white shadow-sm">
+                        <p className="font-black uppercase text-[11px] tracking-widest mb-2" style={{ color: '#1e3a5f' }}>Radiologist Impression</p>
+                        <p className="text-[12px] leading-6 text-gray-800 font-medium">{impression}</p>
                       </div>
-
-                      {/* ══ RECOMMENDATIONS ══ */}
-                      <div className="rounded-xl p-5" style={{ background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 100%)', border: '1px solid #c7d7ff' }}>
-                        <p className="font-black uppercase text-[12px] tracking-widest mb-3 text-[#1e3a5f]">Recommended Clinical Actions</p>
-                        <ul className="space-y-2">
-                          {recommendations.map((rec, i) => (
-                            <li key={i} className="flex items-start gap-3">
-                              <span className="text-[#1e3a5f] font-black text-sm flex-shrink-0">→</span>
-                              <span className="text-[12.5px] leading-6 text-gray-800">{rec}</span>
-                            </li>
-                          ))}
+                      <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 100%)', border: '1px solid #c7d7ff' }}>
+                        <p className="font-black uppercase text-[11px] tracking-widest mb-2 text-[#1e3a5f]">Recommended Clinical Actions</p>
+                        <ul className="space-y-1">
+                          {recommendations.map((rec, i) => (<li key={i} className="flex items-start gap-2"><span className="text-[#1e3a5f] font-black text-sm flex-shrink-0">→</span><span className="text-[12px] leading-5 text-gray-800">{rec}</span></li>))}
                         </ul>
                       </div>
-
-                      {/* ══ DISCLAIMER NOTE ══ */}
                       <div className="border-t-2 border-gray-200 pt-4">
-                        <p className="text-[11.5px] text-gray-500 italic text-center leading-6">
-                          This report is fully AI-generated by OncoScanAI. It is intended for preliminary clinical reference only and does not constitute a formal medical diagnosis. A licensed radiologist or pathologist must review and validate all findings before any clinical decision is made.
-                        </p>
+                        <p className="text-[11px] text-gray-500 italic text-center leading-6">This report is fully AI-generated by OncoScanAI. It is intended for preliminary clinical reference only and does not constitute a formal medical diagnosis. A licensed radiologist or pathologist must review and validate all findings before any clinical decision is made.</p>
                       </div>
                     </div>
-
-                    {/* ══ FOOTER ══ */}
                     <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)' }} className="px-6 py-3 flex items-center justify-between">
-                      <p className="text-blue-200 text-[10px] italic max-w-md">This report is AI-generated for preliminary reference only. A licensed radiologist must review, interpret and validate findings before any clinical decision is made.</p>
+                      <p className="text-blue-200 text-[10px] italic max-w-md">This report is AI-generated for preliminary reference only. A licensed radiologist must review before clinical use.</p>
                       <p className="text-white text-[10px] font-mono font-bold flex-shrink-0 ml-4">{reportId} · OncoScanAI v2</p>
                     </div>
                   </div>
                 );
               })()}
             </div>
-            </>
-            ) : selectedFile.status === 'Failed' ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-16 h-16 flex items-center justify-center bg-red-100 rounded-full mb-4">
-                  <InfoIcon className="w-8 h-8 text-red-600"/>
+
+            {/* RIGHT — Model Results */}
+            <div className="overflow-y-auto flex flex-col gap-4">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Model Results</h3>
+
+              {/* Scan panels */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Original Scan</p>
+                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden">
+                    <img src={selectedFile.previewUrl} alt="Original" className="max-w-full max-h-full object-contain" />
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-red-700 mt-4">Analysis Failed</h3>
-                <p className="text-brand-text-secondary max-w-md mt-2 bg-gray-100 p-3 rounded-md border border-gray-200 text-left">
-                  <strong>Error details from the server:</strong>
-                  <code className="block bg-gray-200 p-2 rounded mt-2 text-red-900 text-xs whitespace-pre-wrap">
-                    {selectedFile.errorMessage || 'No specific error message was returned.'}
-                  </code>
-                </p>
+                <div>
+                  <p className="text-[10px] font-semibold text-brand-text-secondary mb-1 text-center uppercase">Segmentation</p>
+                  <div className="h-44 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    <img src={selectedFile.previewUrl} alt="Seg" className="max-w-full max-h-full object-contain" />
+                    {selectedFile.analysis.segmentationMask && (
+                      <img src={selectedFile.analysis.segmentationMask} alt="Mask" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : (
-             <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-12 h-12 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
-                <h3 className="text-lg font-semibold text-brand-text-primary mt-4">Analyzing Scan...</h3>
-                <p className="text-brand-text-secondary max-w-xs mt-1">The AI model is currently processing the scan. This may take a moment.</p>
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <AnalysisStatCard title="AI CONFIDENCE" value={`${(selectedFile.analysis.confidence * 100).toFixed(1)}%`} />
+                <AnalysisStatCard title="TUMOUR AREA" value={selectedFile.analysis.area != null ? `${selectedFile.analysis.area.toFixed(2)} mm²` : 'N/A'} />
+                <AnalysisStatCard title="TUMOUR PIXELS" value={selectedFile.analysis.pixels != null ? `${selectedFile.analysis.pixels} PX` : 'N/A'} />
+              </div>
+
+              {/* Insight */}
+              <div className="bg-blue-50 border-l-4 border-blue-400 text-brand-text-primary p-4 rounded-r-lg">
+                <p className="font-semibold text-sm">Radiologist Insight:</p>
+                <p className="text-sm mt-1">{selectedFile.analysis.insight}</p>
+              </div>
+
+              {/* Engine */}
+              <div className="flex items-center gap-2 text-[10px] text-brand-text-secondary bg-white border border-gray-200 rounded-lg p-3">
+                <ModelIcon className="w-3.5 h-3.5" />
+                <span className="font-bold">MODELS: {selectedFile.analysis.modelUsed}</span>
+                <span className="text-green-600 font-bold flex items-center gap-1 ml-2"><LiveIcon className="w-3 h-3" /> LIVE INFERENCE</span>
+              </div>
+              {selectedFile.analysis.classificationEngine && (
+                <div className="text-[10px] text-brand-text-secondary space-y-0.5 px-1">
+                  <p>Classification: {selectedFile.analysis.classificationEngine}</p>
+                  {selectedFile.analysis.segmentationEngine && <p>Segmentation: {selectedFile.analysis.segmentationEngine}</p>}
+                </div>
+              )}
             </div>
-            )}
-            </>
+          </div>
+
+        ) : selectedFile && selectedFile.status === 'Failed' ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center bg-white rounded-xl border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3"><InfoIcon className="w-6 h-6 text-red-600" /></div>
+            <h3 className="text-base font-semibold text-red-700">Analysis Failed</h3>
+            <p className="text-sm text-brand-text-secondary mt-1 max-w-sm">{selectedFile.errorMessage}</p>
+          </div>
+        ) : selectedFile ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center bg-white rounded-xl border border-gray-200">
+            <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+            <h3 className="text-base font-semibold text-brand-text-primary">Analyzing Scan…</h3>
+          </div>
         ) : (
-             <div className="flex flex-col items-center justify-center h-full text-center">
-                <VisionIcon className="w-16 h-16 text-gray-300 mb-4" />
-                <h3 className="text-lg font-semibold text-brand-text-primary">Select a scan</h3>
-                <p className="text-brand-text-secondary max-w-xs mt-1">Upload a new scan or select one from the queue to view the detailed AI analysis here.</p>
-            </div>
+          <div className="flex flex-col items-center justify-center h-48 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+            <VisionIcon className="w-10 h-10 text-gray-300 mb-3" />
+            <p className="text-sm font-semibold text-slate-500">Upload a scan above to begin</p>
+          </div>
         )}
+        </div>
       </div>
-    </div>
     </div>
   );
 };
