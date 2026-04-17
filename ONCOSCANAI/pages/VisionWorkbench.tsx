@@ -387,73 +387,90 @@ const VisionWorkbench: React.FC = () => {
     <div className="flex flex-col gap-5 h-full">
 
       {/* ══ TOP: Upload zone + engine selector + queue ══ */}
-      <div className="bg-white rounded-2xl shadow-subtle border border-slate-200 p-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="relative rounded-2xl shadow-subtle border border-slate-200 overflow-hidden">
+        {/* Dot-grid background */}
+        <div className="absolute inset-0 dot-grid-bg opacity-40 pointer-events-none" />
+        <div className="relative bg-white/80 backdrop-blur-sm p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-          {/* Engine selector */}
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
-              Active Engine
-              {isLoadingModels && <div className="w-3 h-3 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {availableModels.length === 0 && !isLoadingModels
-                ? <p className="text-[10px] text-slate-400 font-bold">No histology models detected. Add alexnet.pth, efficient_net.pth, or yolov11.pth</p>
-                : availableModels.map(m => (
-                    <button key={m} onClick={() => setActiveModel(m)}
-                      className={`py-1.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeModel === m ? 'bg-brand-pink text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                      {getModelDisplayName(m)}
-                      {activeModel === m && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-                    </button>
-                  ))
-              }
-            </div>
-          </div>
-
-          {/* Drop zone */}
-          <div
-            className={`border-2 border-dashed rounded-xl flex items-center justify-center gap-4 px-6 py-8 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-slate-200 hover:border-brand-pink/50'}`}
-            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={e => { setIsDragging(false); onFileDrop(e); }}
-          >
-            <input type="file" id="file-upload" className="hidden" multiple onChange={onFileDrop} />
-            <label htmlFor="file-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-7 h-7 text-brand-pink" />
+            {/* Engine selector */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                Active Engine
+                {isLoadingModels && <div className="w-3 h-3 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {availableModels.length === 0 && !isLoadingModels
+                  ? <p className="text-[10px] text-slate-400 font-bold">No histology models detected. Add alexnet.pth, efficient_net.pth, or yolov11.pth</p>
+                  : availableModels.map(m => (
+                      <button key={m} onClick={() => setActiveModel(m)}
+                        className={`py-1.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeModel === m ? 'bg-brand-pink text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                        {getModelDisplayName(m)}
+                        {activeModel === m && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                      </button>
+                    ))
+                }
               </div>
-              <div>
-                <p className="text-base font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
-                <p className="text-xs text-slate-400 mt-1">PNG, JPG, TIFF, SVS supported</p>
-              </div>
-            </label>
-          </div>
-
-          {/* Scan queue */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clinical Queue</p>
-              <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{files.length}</span>
             </div>
-            <div className="space-y-1 max-h-24 overflow-y-auto">
-              {files.length === 0
-                ? <p className="text-[10px] text-slate-400 text-center py-2">No scans uploaded yet</p>
-                : files.map(f => (
-                    <button key={f.id} onClick={() => setSelectedFileId(f.id)}
-                      className={`w-full flex items-center p-1.5 rounded-lg transition-all ${selectedFileId === f.id ? 'bg-pink-50 ring-1 ring-brand-pink' : 'hover:bg-slate-50'}`}>
-                      <div className="w-7 h-7 rounded-md bg-slate-200 mr-2 flex-shrink-0 overflow-hidden">
-                        <img src={f.previewUrl} className="w-full h-full object-cover" alt="" />
-                      </div>
-                      <p className="text-[10px] font-bold truncate text-slate-700 flex-grow text-left">{f.name}</p>
-                      <span className={`text-[9px] font-black uppercase ml-1 flex-shrink-0 ${f.status === 'Complete' ? 'text-green-600' : f.status === 'Failed' ? 'text-red-500' : 'text-slate-400'}`}>{f.status}</span>
-                      {f.status === 'Analyzing' && <div className="w-2 h-2 border-2 border-brand-pink border-t-transparent rounded-full animate-spin ml-1 flex-shrink-0" />}
-                    </button>
-                  ))
-              }
+
+            {/* Drop zone — animated gradient border when idle */}
+            <div
+              className={`rounded-xl px-6 py-8 transition-all cursor-pointer ${isDragging ? 'bg-pink-50 scale-[1.02]' : 'upload-zone-idle bg-white/70'}`}
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={e => { setIsDragging(false); onFileDrop(e); }}
+            >
+              <input type="file" id="file-upload" className="hidden" multiple onChange={onFileDrop} />
+              <label htmlFor="file-upload" className="flex items-center gap-4 cursor-pointer w-full">
+                {/* Live preview thumbnail — shows last uploaded scan */}
+                {files.length > 0 && files[0].previewUrl ? (
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-brand-pink shadow-md flex-shrink-0">
+                    <img src={files[0].previewUrl} alt="preview" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <UploadIcon className="w-7 h-7 text-brand-pink" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-base font-bold text-slate-700">
+                    {files.length > 0 ? `${files.length} scan${files.length > 1 ? 's' : ''} loaded · ` : ''}
+                    <span className="text-brand-pink underline">Browse or Drop</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">PNG, JPG, TIFF, SVS supported</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Scan queue */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clinical Queue</p>
+                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{files.length}</span>
+              </div>
+              <div className="space-y-1 max-h-24 overflow-y-auto">
+                {files.length === 0
+                  ? <p className="text-[10px] text-slate-400 text-center py-2">No scans uploaded yet</p>
+                  : files.map(f => (
+                      <button key={f.id} onClick={() => setSelectedFileId(f.id)}
+                        className={`w-full flex items-center p-1.5 rounded-lg transition-all ${selectedFileId === f.id ? 'bg-pink-50 ring-1 ring-brand-pink' : 'hover:bg-slate-50'}`}>
+                        <div className="w-7 h-7 rounded-md bg-slate-200 mr-2 flex-shrink-0 overflow-hidden">
+                          <img src={f.previewUrl} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <p className="text-[10px] font-bold truncate text-slate-700 flex-grow text-left">{f.name}</p>
+                        <span className={`text-[9px] font-black uppercase ml-1 flex-shrink-0 ${f.status === 'Complete' ? 'text-green-600' : f.status === 'Failed' ? 'text-red-500' : 'text-slate-400'}`}>{f.status}</span>
+                        {f.status === 'Analyzing' && <div className="w-2 h-2 border-2 border-brand-pink border-t-transparent rounded-full animate-spin ml-1 flex-shrink-0" />}
+                      </button>
+                    ))
+                }
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ══ GRADIENT SEPARATOR ══ */}
+      <hr className="gradient-separator" />
 
       {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
       {selectedFile ? (

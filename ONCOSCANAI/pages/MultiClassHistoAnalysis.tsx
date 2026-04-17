@@ -381,25 +381,37 @@ const MultiClassHistoAnalysis: React.FC = () => {
     <div className="flex flex-col gap-5 h-full">
 
       {/* ══ TOP: Upload + queue ══ */}
-      <div className="bg-white rounded-2xl shadow-subtle border border-gray-200 p-5">
+      <div className="relative rounded-2xl shadow-subtle border border-gray-200 overflow-hidden">
+        <div className="absolute inset-0 dot-grid-bg opacity-40 pointer-events-none" />
+        <div className="relative bg-white/80 backdrop-blur-sm p-5">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* Drop zone */}
+          {/* Drop zone — animated gradient border when idle */}
           <div
             onDragEnter={e => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-6 py-8 transition-all cursor-pointer ${isDragging ? 'border-brand-pink bg-pink-50' : 'border-gray-200 hover:border-brand-pink/50'}`}
+            className={`rounded-xl flex items-center gap-4 px-6 py-8 transition-all cursor-pointer ${isDragging ? 'bg-pink-50 scale-[1.02]' : 'upload-zone-idle bg-white/70'}`}
           >
             <input type="file" id="histo-file-upload" className="hidden" multiple accept=".png,.jpg,.jpeg,.svs,.tiff"
               onChange={e => e.target.files && handleFiles(Array.from(e.target.files))} />
-            <label htmlFor="histo-file-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-7 h-7 text-brand-pink" />
-              </div>
+            <label htmlFor="histo-file-upload" className="flex items-center gap-4 cursor-pointer w-full">
+              {/* Live preview thumbnail */}
+              {files.length > 0 && files[0].previewUrl ? (
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-brand-pink shadow-md flex-shrink-0">
+                  <img src={files[0].previewUrl} alt="preview" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-14 h-14 bg-pink-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <UploadIcon className="w-7 h-7 text-brand-pink" />
+                </div>
+              )}
               <div>
-                <p className="text-base font-bold text-slate-700">Drop Histology Scan or <span className="text-brand-pink underline">Browse</span></p>
+                <p className="text-base font-bold text-slate-700">
+                  {files.length > 0 ? `${files.length} scan${files.length > 1 ? 's' : ''} loaded · ` : ''}
+                  <span className="text-brand-pink underline">Browse or Drop</span>
+                </p>
                 <p className="text-xs text-slate-400 mt-1">PNG, JPG, TIFF, SVS · OncoScanAI Master Model</p>
               </div>
             </label>
@@ -433,7 +445,11 @@ const MultiClassHistoAnalysis: React.FC = () => {
             </div>
           </div>
         </div>
+        </div>
       </div>
+
+      {/* ══ GRADIENT SEPARATOR ══ */}
+      <hr className="gradient-separator" />
 
       {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
       <div className="flex-1 min-h-0">

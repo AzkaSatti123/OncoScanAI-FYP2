@@ -317,7 +317,9 @@ const UploadScans: React.FC = () => {
     <div className="flex flex-col gap-5 h-full">
 
       {/* ══ TOP: Upload + queue ══ */}
-      <div className="bg-white rounded-2xl shadow-subtle border border-gray-200 p-5">
+      <div className="relative rounded-2xl shadow-subtle border border-gray-200 overflow-hidden">
+        <div className="absolute inset-0 dot-grid-bg opacity-40 pointer-events-none" />
+        <div className="relative bg-white/80 backdrop-blur-sm p-5">
         {(backendError || (backendModels && backendModels.length === 0)) && (
           <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-900 p-3 rounded-lg text-xs">
             <span className="font-bold">Models Missing: </span>
@@ -326,21 +328,31 @@ const UploadScans: React.FC = () => {
         )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* Drop zone */}
+          {/* Drop zone — animated gradient border when idle */}
           <div
             onDragEnter={e => handleDragEvents(e, true)}
             onDragLeave={e => handleDragEvents(e, false)}
             onDragOver={e => e.preventDefault()}
             onDrop={onDrop}
-            className={`border-2 border-dashed rounded-xl flex items-center gap-4 px-6 py-8 transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+            className={`rounded-xl flex items-center gap-4 px-6 py-8 transition-all ${isDragging ? 'bg-blue-50 scale-[1.02]' : 'upload-zone-idle bg-white/70'}`}
           >
             <input type="file" id="vision-upload" className="hidden" multiple onChange={e => e.target.files && handleFileDrop(Array.from(e.target.files))} />
-            <label htmlFor="vision-upload" className="flex items-center gap-3 cursor-pointer w-full">
-              <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <UploadIcon className="w-7 h-7 text-blue-500" />
-              </div>
+            <label htmlFor="vision-upload" className="flex items-center gap-4 cursor-pointer w-full">
+              {/* Live preview thumbnail */}
+              {files.length > 0 && files[0].previewUrl ? (
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-blue-400 shadow-md flex-shrink-0">
+                  <img src={files[0].previewUrl} alt="preview" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <UploadIcon className="w-7 h-7 text-blue-500" />
+                </div>
+              )}
               <div>
-                <p className="text-base font-bold text-slate-700">Drop Ultrasound Scan or <span className="text-blue-500 underline">Browse</span></p>
+                <p className="text-base font-bold text-slate-700">
+                  {files.length > 0 ? `${files.length} scan${files.length > 1 ? 's' : ''} loaded · ` : ''}
+                  <span className="text-blue-500 underline">Browse or Drop</span>
+                </p>
                 <p className="text-xs text-slate-400 mt-1">PNG, JPG, DICOM — Max 500MB</p>
               </div>
             </label>
@@ -373,7 +385,11 @@ const UploadScans: React.FC = () => {
             </div>
           </div>
         </div>
+        </div>
       </div>
+
+      {/* ══ GRADIENT SEPARATOR ══ */}
+      <hr className="gradient-separator" />
 
       {/* ══ BOTTOM: Report (left) + Model Results (right) ══ */}
       <div className="flex-1 min-h-0">
