@@ -287,10 +287,13 @@ const VisionWorkbench: React.FC = () => {
 
   /* Fetch NLP enrichment from worker (optional — enhances text only) */
   const fetchNLPEnrichment = async (fileId: string, fileName: string, analysis: AnalysisResult) => {
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 5000);
     try {
       const res = await fetch(REPORT_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           fileName,
           analysis: {
@@ -303,6 +306,7 @@ const VisionWorkbench: React.FC = () => {
           },
         }),
       });
+      clearTimeout(timeoutId);
       if (!res.ok) return;
 
       type WR = { report?: string; sections?: unknown[]; patientInfo?: Record<string, string> };
@@ -322,7 +326,11 @@ const VisionWorkbench: React.FC = () => {
       }
       if (structuredReport)
         updateFile(fileId, f => ({ ...f, structuredReport, reportStatus: 'Complete' }));
-    } catch { /* worker offline — report still renders from inference data */ }
+    } catch {
+      clearTimeout(timeoutId);
+      /* worker offline / timed out — report still renders from inference data */
+    }
+    updateFile(fileId, f => f.reportStatus === 'Generating' ? { ...f, reportStatus: 'Complete' } : f);
   };
 
   const handleAnalysis = async (fileId: string, rawFile: File, modelName: string) => {

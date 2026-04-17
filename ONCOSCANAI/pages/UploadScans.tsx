@@ -153,10 +153,15 @@ const UploadScans: React.FC = () => {
       analysis.pixels != null ? `Segmented pixel count: ${analysis.pixels} px.`              : '',
     ].filter(Boolean).join(' ').trim();
 
+    // Always complete within 5 s — abort the worker call if it hangs
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 5000);
+
     try {
       const res = await fetch(REPORT_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           fileName: fileObj.name,
           analysis: {
@@ -170,9 +175,10 @@ const UploadScans: React.FC = () => {
         }),
       });
 
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error(`Status ${res.status}`);
 
-      const json = await res.json() as WorkerReportResponse;
+      const json   = await res.json() as WorkerReportResponse;
       const report = normalizeReportText(json.report) || localFallback;
 
       updateUploadedFile(fileObj.id, file => ({
@@ -182,7 +188,8 @@ const UploadScans: React.FC = () => {
         reportError: undefined,
       }));
     } catch {
-      // Worker offline — use local fallback so the report still renders
+      clearTimeout(timeoutId);
+      // Worker offline / timed out — use local fallback immediately
       updateUploadedFile(fileObj.id, file => ({
         ...file,
         reportStatus: 'Complete',

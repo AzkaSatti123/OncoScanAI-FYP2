@@ -290,10 +290,13 @@ const MultiClassHistoAnalysis: React.FC = () => {
   /* NLP enrichment via Cloudflare Worker */
   const enrichReport = async (fileObj: UploadedFile, prediction: HistoPrediction) => {
     const fields = getPredictionFields(prediction);
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 5000);
     try {
       const res = await fetch(REPORT_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           fileName: fileObj.name,
           analysis: {
@@ -308,6 +311,7 @@ const MultiClassHistoAnalysis: React.FC = () => {
           },
         }),
       });
+      clearTimeout(timeoutId);
       if (!res.ok) return;
 
       const json = await res.json() as WorkerReportResponse;
@@ -327,7 +331,11 @@ const MultiClassHistoAnalysis: React.FC = () => {
 
       if (structuredReport)
         updateFile(fileObj.id, f => ({ ...f, structuredReport, reportStatus: 'Complete' }));
-    } catch { /* worker offline — report still renders from inference data */ }
+    } catch {
+      clearTimeout(timeoutId);
+      /* worker offline / timed out — report renders from inference data */
+    }
+    updateFile(fileObj.id, f => f.reportStatus === 'Generating' ? { ...f, reportStatus: 'Complete' } : f);
   };
 
   const handleFiles = async (newFiles: File[]) => {
