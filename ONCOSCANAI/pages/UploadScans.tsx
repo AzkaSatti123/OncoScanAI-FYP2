@@ -519,8 +519,8 @@ const UploadScans: React.FC = () => {
                       <div><span className="text-gray-500 font-semibold">Result:</span> <span className="font-black" style={{ color: diagBadgeBg }}>{a.pathology.toUpperCase()}</span></div>
                     </div>
                     <div className="text-center py-4 border-b border-gray-200 bg-white">
-                      <h2 className="text-[1.2rem] font-black tracking-widest uppercase" style={{ color: '#1e3a5f' }}>Ultrasound Analysis Report</h2>
-                      <p className="text-[10px] text-gray-400 mt-0.5">AI-Assisted Lesion Detection & Segmentation · OncoScanAI</p>
+                      <h2 className="font-serif text-[1.4rem] font-bold tracking-wide text-gray-800">Ultrasound Analysis Report</h2>
+                      <p className="text-[10.5px] text-gray-500 mt-1 tracking-wide">AI-Assisted Lesion Detection & Segmentation · OncoScanAI</p>
                     </div>
                     <div className="px-6 pt-5 pb-6 space-y-5">
                       <div className="flex items-center gap-5 p-4 rounded-xl border-2" style={{ borderColor: diagBadgeBg, backgroundColor: `${diagBadgeBg}08` }}>
@@ -570,30 +570,35 @@ const UploadScans: React.FC = () => {
                       </div>
                       <div className="rounded-xl border-l-4 border-[#1e3a5f] bg-blue-50/50 p-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <p className="font-black uppercase text-[11px] tracking-widest text-[#1e3a5f]">Key Findings</p>
+                          <p className="font-serif font-bold uppercase text-[12px] tracking-widest text-[#1e3a5f]">Key Findings</p>
                           {selectedFile.reportStatus === 'Generating' && <span className="flex items-center gap-1 text-[9px] text-brand-pink font-bold animate-pulse ml-2"><span className="w-1.5 h-1.5 rounded-full bg-brand-pink inline-block animate-ping" />Enhancing…</span>}
                         </div>
-                        <ul className="space-y-1.5">
+                        <ul className="space-y-2">
                           {keyFindings.map((point, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <span className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-black mt-0.5" style={{ backgroundColor: '#1e3a5f' }}>{i + 1}</span>
-                              <span className="text-[12px] leading-5 text-gray-800" dangerouslySetInnerHTML={{ __html: point }} />
+                            <li key={i} className="flex items-start gap-2.5">
+                              <span className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-black mt-1" style={{ backgroundColor: '#1e3a5f' }}>{i + 1}</span>
+                              <span className="text-[12.5px] leading-[1.9] text-gray-800" dangerouslySetInnerHTML={{ __html: point }} />
                             </li>
                           ))}
                         </ul>
                       </div>
-                      <div className="rounded-xl border border-gray-200 p-4 bg-white shadow-sm">
-                        <p className="font-black uppercase text-[11px] tracking-widest mb-2" style={{ color: '#1e3a5f' }}>Radiologist Impression</p>
-                        <p className="text-[12px] leading-6 text-gray-800 font-medium">{impression}</p>
+                      <div className="rounded-xl border border-gray-200 p-4 bg-white shadow-sm border-t-0 rounded-t-none" style={{ borderTop: '1px solid #f1f5f9' }}>
+                        <p className="font-serif font-bold uppercase text-[12px] tracking-widest mb-2" style={{ color: '#1e3a5f' }}>Radiologist Impression</p>
+                        <p className="text-[12.5px] leading-[1.9] text-gray-800">{impression}</p>
                       </div>
                       <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 100%)', border: '1px solid #c7d7ff' }}>
-                        <p className="font-black uppercase text-[11px] tracking-widest mb-2 text-[#1e3a5f]">Recommended Clinical Actions</p>
-                        <ul className="space-y-1">
-                          {recommendations.map((rec, i) => (<li key={i} className="flex items-start gap-2"><span className="text-[#1e3a5f] font-black text-sm flex-shrink-0">→</span><span className="text-[12px] leading-5 text-gray-800">{rec}</span></li>))}
+                        <p className="font-serif font-bold uppercase text-[12px] tracking-widest mb-3 text-[#1e3a5f]">Recommended Clinical Actions</p>
+                        <ul className="space-y-2">
+                          {recommendations.map((rec, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="text-[#1e3a5f] font-black text-sm flex-shrink-0 mt-0.5">→</span>
+                              <span className="text-[12.5px] leading-[1.9] text-gray-800">{rec}</span>
+                            </li>
+                          ))}
                         </ul>
                       </div>
-                      <div className="border-t-2 border-gray-200 pt-4">
-                        <p className="text-[11px] text-gray-500 italic text-center leading-6">This report is fully AI-generated by OncoScanAI. It is intended for preliminary clinical reference only and does not constitute a formal medical diagnosis. A licensed radiologist or pathologist must review and validate all findings before any clinical decision is made.</p>
+                      <div className="border-t border-gray-100 pt-4">
+                        <p className="font-serif text-[11.5px] text-gray-500 italic text-center leading-[1.9]">This report is fully AI-generated by OncoScanAI. It is intended for preliminary clinical reference only and does not constitute a formal medical diagnosis. A licensed radiologist or pathologist must review and validate all findings before any clinical decision is made.</p>
                       </div>
                     </div>
                     <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)' }} className="px-6 py-3 flex items-center justify-between">

@@ -128,9 +128,9 @@ const PathologyReport: React.FC<{ file: UploadedFile; analysis: AnalysisResult }
       </div>
 
       {/* ══ TITLE ══ */}
-      <div className="text-center py-3 border-b border-gray-300 bg-gray-50">
-        <h2 className="text-[1.4rem] font-bold tracking-wide">Surgical Pathology Report</h2>
-        <p className="text-[10.5px] text-gray-500 mt-0.5">AI-Assisted Histopathology Analysis · OncoScanAI Uni-HistoAnalysis</p>
+      <div className="text-center py-4 border-b border-gray-300 bg-gray-50">
+        <h2 className="font-serif text-[1.5rem] font-bold tracking-wide text-gray-800">Surgical Pathology Report</h2>
+        <p className="text-[10.5px] text-gray-500 mt-1 tracking-wide">AI-Assisted Histopathology Analysis · OncoScanAI Uni-HistoAnalysis</p>
       </div>
 
       {/* ══ DIAGNOSIS BOX ══ */}
@@ -183,62 +183,62 @@ const PathologyReport: React.FC<{ file: UploadedFile; analysis: AnalysisResult }
       )}
 
       {/* ══ CLINICAL SECTIONS ══ */}
-      <div className="mx-5 mt-5 mb-5 space-y-2.5 text-[12px] leading-[1.6]">
+      <div className="mx-5 mt-4 mb-5 text-[12.5px] text-gray-800">
 
-        <div>
-          <span className="font-bold uppercase">Clinical History: </span>
-          {clinicalHistory}
-        </div>
+        {[
+          {
+            label: 'Clinical History',
+            content: <span className="leading-[1.9]">{clinicalHistory}</span>,
+          },
+          {
+            label: 'Sites',
+            content: <span className="leading-[1.9]">Histology image — single core biopsy or whole-slide scan submitted for AI single-class classification.</span>,
+          },
+          {
+            label: 'Gross',
+            content: <span className="leading-[1.9]">Received as a scanned histological image ({file.size}). Submitted for single-class inference using the {analysis.modelUsed} engine. Image processed at full resolution. Classification result: <strong>{analysis.pathology}</strong>.</span>,
+          },
+          {
+            label: 'Microscopic',
+            content: <span className="leading-[1.9]">{microscopic}</span>,
+          },
+          {
+            label: 'Impression',
+            content: <span className="leading-[1.9]">{impression}</span>,
+          },
+          {
+            label: 'Management Considerations',
+            content: <span className="leading-[1.9]">{management}</span>,
+          },
+          {
+            label: 'Limitations',
+            content: <span className="leading-[1.9]">{limitations}</span>,
+          },
+          {
+            label: 'Previous BX / AI History',
+            content: <span className="leading-[1.9]">No prior AI scan history available for this session.</span>,
+          },
+        ].map((section, i) => (
+          <div key={i} className={`py-3 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+            <span className="font-serif font-bold text-[12px] uppercase tracking-widest text-gray-700">{section.label}: </span>
+            {section.content}
+          </div>
+        ))}
 
-        <div>
-          <span className="font-bold uppercase">Sites: </span>
-          Histology image — single core biopsy or whole-slide scan submitted for AI single-class classification.
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Gross: </span>
-          Received as a scanned histological image ({file.size}). Submitted for single-class inference using the {analysis.modelUsed} engine.
-          Image processed at full resolution. Classification result: <strong>{analysis.pathology}</strong>.
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Microscopic: </span>
-          {microscopic}
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Impression: </span>
-          {impression}
-        </div>
-
-        <div>
-          <p className="font-bold uppercase mb-1">Recommended Clinical Next Steps:</p>
-          <div className="pl-3 space-y-0.5">
+        {/* Recommended Clinical Next Steps — separate because it has a list */}
+        <div className="py-3 border-t border-gray-100">
+          <p className="font-serif font-bold text-[12px] uppercase tracking-widest text-gray-700 mb-2">Recommended Clinical Next Steps:</p>
+          <div className="pl-4 space-y-1.5">
             {(steps.length ? steps : [nextStepsRaw]).map((step, i) => (
-              <p key={i}><span className="font-semibold">{i + 1}.</span> {step.replace(/^\d+\.\s*/, '')}</p>
+              <p key={i} className="leading-[1.9]"><span className="font-semibold text-gray-600">{i + 1}.</span> {step.replace(/^\d+\.\s*/, '')}</p>
             ))}
           </div>
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Management Considerations: </span>
-          {management}
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Limitations: </span>
-          {limitations}
-        </div>
-
-        <div>
-          <span className="font-bold uppercase">Previous BX / AI History: </span>
-          No prior AI scan history available for this session.
         </div>
       </div>
 
       {/* ══ FOOTER ══ */}
-      <div className="border-t-2 border-gray-300 mx-5 pt-2 pb-3 flex items-center justify-between">
-        <p className="text-[10px] text-gray-400 italic max-w-lg">
+      <div className="border-t border-gray-100 mx-5 pt-3 pb-3 flex items-center justify-between">
+        <p className="font-serif text-[10.5px] text-gray-400 italic max-w-lg leading-[1.8]">
           This AI-generated report is a preliminary draft for clinical reference only.
           A licensed pathologist must review and sign off before any diagnostic or treatment decision is made.
         </p>
