@@ -491,161 +491,241 @@ const UploadScans: React.FC = () => {
                 const confBarColor = confPct < 40 ? '#dc2626' : confPct <= 80 ? '#f59e0b' : '#16a34a';
                 const confLabel    = confPct < 40 ? 'Low' : confPct <= 80 ? 'Moderate' : 'High';
 
-                const findings = selectedFile.suggestiveReport
+                // Build structured key findings as bullet points
+                const rawFindings = selectedFile.suggestiveReport
                   ? selectedFile.suggestiveReport.replace(/\*\*/g, '').trim()
-                  : [
-                      `Ultrasound imaging of the submitted scan demonstrates findings consistent with ${a.pathology.toLowerCase()} pathology.`,
-                      a.insight || '',
-                      a.area   != null ? `Estimated lesion area: ${a.area.toFixed(2)} mm².`   : '',
-                      a.pixels != null ? `Segmented pixel count: ${a.pixels} px.`              : '',
-                    ].filter(Boolean).join(' ').trim();
+                  : '';
+
+                const keyFindings: string[] = [
+                  `Ultrasound imaging demonstrates features consistent with a <strong>${a.pathology}</strong> lesion pattern.`,
+                  a.insight ? a.insight : null,
+                  a.area   != null ? `Estimated lesion area: <strong>${a.area.toFixed(2)} mm²</strong> based on AI segmentation mask.` : null,
+                  a.pixels != null ? `Segmented region spans approximately <strong>${a.pixels} pixels</strong> on the submitted scan.` : null,
+                  isMalignant ? `Irregular borders and heterogeneous echo texture noted — suspicious morphology detected.` : null,
+                  isBenign    ? `Well-defined margins and homogeneous internal echo pattern — benign morphology indicated.` : null,
+                  isNormal    ? `No discrete mass lesion or pathological echo abnormality identified on this scan.` : null,
+                  a.classificationEngine ? `Classification Engine: <strong>${a.classificationEngine}</strong>` : null,
+                  a.segmentationEngine   ? `Segmentation Engine: <strong>${a.segmentationEngine}</strong>`   : null,
+                ].filter(Boolean) as string[];
+
+                // If worker returned enriched text, prepend it as the first bullet
+                if (rawFindings) keyFindings.unshift(rawFindings.split('.')[0].trim() + '.');
 
                 const impression = isMalignant
-                  ? `Findings are suspicious for malignancy. Urgent clinical correlation and biopsy are strongly recommended.`
+                  ? `Imaging findings are suspicious for malignancy. Urgent clinical correlation, further diagnostic workup, and core needle biopsy are strongly recommended. Multidisciplinary oncology review advised.`
                   : isBenign
-                  ? `Findings are consistent with a benign lesion. Routine follow-up imaging is advised.`
+                  ? `Imaging findings are consistent with a benign lesion. Routine clinical follow-up and interval ultrasound in 6 months is advised. No immediate intervention required.`
                   : isNormal
-                  ? `No significant pathological abnormality identified. Routine follow-up as clinically indicated.`
-                  : `Findings are inconclusive. Additional imaging and clinical correlation are recommended.`;
+                  ? `No significant pathological abnormality identified on this ultrasound examination. Routine follow-up as clinically indicated.`
+                  : `Imaging findings are inconclusive. Correlation with clinical history, laboratory data, and additional cross-sectional imaging (MRI/CT) is recommended.`;
+
+                const recommendations = isMalignant
+                  ? ['Urgent referral to breast oncology / surgical oncology', 'Core needle biopsy for tissue diagnosis', 'Staging workup — MRI breast, CT chest/abdomen/pelvis', 'Multidisciplinary tumor board review', 'Patient counselling and support']
+                  : isBenign
+                  ? ['Routine follow-up ultrasound in 6 months', 'Clinical correlation with physical examination', 'Mammography if not recently performed', 'Re-evaluate if symptoms change']
+                  : isNormal
+                  ? ['Routine annual screening as clinically appropriate', 'Clinical follow-up if symptoms persist']
+                  : ['Additional cross-sectional imaging (MRI/CT)', 'Clinical correlation with history and labs', 'Short-interval follow-up ultrasound in 3 months'];
 
                 return (
-                  <div className="bg-white border-2 border-gray-300 shadow-xl font-sans text-[13px] text-gray-900" id="us-report">
+                  <div className="bg-white border border-gray-200 shadow-2xl font-sans text-[13px] text-gray-900 rounded-lg overflow-hidden" id="us-report">
 
-                    {/* ── CLINIC HEADER ── */}
-                    <div style={{ backgroundColor: accentColor }} className="px-6 py-4 flex items-center justify-between">
+                    {/* ══ CLINIC HEADER ══ */}
+                    <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)' }} className="px-6 py-5 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        {/* Clinic logo / icon */}
-                        <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-blue-200">
-                          <svg viewBox="0 0 24 24" className="w-8 h-8 text-[#1e3a5f]" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h.75" />
+                        <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                          <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="#1e3a5f" strokeWidth="1.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
                           </svg>
                         </div>
                         <div>
-                          <p className="text-white font-black text-[1.1rem] tracking-wide">OncoScanAI Imaging Center</p>
-                          <p className="text-blue-200 text-[11px]">AI-Assisted Radiology & Diagnostic Imaging</p>
-                        </div>
-                      </div>
-                      <div className="text-right text-[11px] text-blue-100 space-y-0.5">
-                        <p>📞 +92-XXX-XXXXXXX</p>
-                        <p>🌐 oncoscanai.health</p>
-                        <p>✉ reports@oncoscanai.health</p>
-                        <p className="text-white font-bold mt-1">24/7 Services</p>
-                      </div>
-                    </div>
-
-                    {/* ── PATIENT INFO STRIP ── */}
-                    <div className="border-b-2 border-gray-300 px-6 py-3 grid grid-cols-3 gap-4 text-[11.5px] bg-gray-50">
-                      <div><span className="font-bold">Patient File:</span> {selectedFile.name}</div>
-                      <div><span className="font-bold">Report ID:</span> {reportId}</div>
-                      <div><span className="font-bold">Date:</span> {reportDate} {reportTime}</div>
-                      <div><span className="font-bold">Modality:</span> Ultrasound</div>
-                      <div><span className="font-bold">Engine:</span> {a.modelUsed || 'OncoScanAI Best Model'}</div>
-                      <div><span className="font-bold">Pathology:</span> <span className="font-black" style={{ color: diagBadgeBg }}>{a.pathology.toUpperCase()}</span></div>
-                    </div>
-
-                    {/* ── REPORT TITLE ── */}
-                    <div className="text-center py-3 border-b border-gray-200">
-                      <h2 className="text-[1.25rem] font-black tracking-widest uppercase" style={{ color: accentColor }}>Ultrasound Analysis Report</h2>
-                      <p className="text-[10.5px] text-gray-500 mt-0.5">AI-Assisted Lesion Detection & Segmentation · OncoScanAI</p>
-                    </div>
-
-                    <div className="px-6 pt-5 pb-6 space-y-5">
-
-                      {/* ── DIAGNOSIS BADGE + CONFIDENCE BAR ── */}
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0 px-5 py-2 rounded text-white font-black text-[12px] uppercase tracking-widest" style={{ backgroundColor: diagBadgeBg }}>
-                          {a.pathology}
-                        </div>
-                        <div className="flex-1 pt-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">AI Confidence</span>
-                            <span className="text-[11px] font-black" style={{ color: confBarColor }}>{confPct.toFixed(1)}% — {confLabel}</span>
+                          <p className="text-white font-black text-[1.2rem] tracking-wide">OncoScanAI Imaging Center</p>
+                          <p className="text-blue-200 text-[11px] mt-0.5">AI-Assisted Radiology & Diagnostic Imaging</p>
+                          <div className="flex gap-3 mt-1">
+                            <span className="text-[10px] text-blue-300">📞 +92-XXX-XXXXXXX</span>
+                            <span className="text-[10px] text-blue-300">🌐 oncoscanai.health</span>
                           </div>
-                          <div className="h-3 w-64 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-700"
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="bg-white/20 backdrop-blur rounded-lg px-4 py-2 text-center">
+                          <p className="text-white font-black text-[11px] uppercase tracking-widest">24/7 Services</p>
+                          <p className="text-blue-200 text-[10px] mt-0.5">✉ reports@oncoscanai.health</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ══ PATIENT & REPORT INFO ══ */}
+                    <div className="bg-slate-50 border-b border-gray-200 px-6 py-3">
+                      <div className="grid grid-cols-3 gap-x-8 gap-y-1 text-[11.5px]">
+                        <div><span className="text-gray-500 font-semibold">Patient File:</span> <span className="font-bold text-gray-800">{selectedFile.name}</span></div>
+                        <div><span className="text-gray-500 font-semibold">Report ID:</span> <span className="font-bold text-gray-800">{reportId}</span></div>
+                        <div><span className="text-gray-500 font-semibold">Date / Time:</span> <span className="font-bold text-gray-800">{reportDate} · {reportTime}</span></div>
+                        <div><span className="text-gray-500 font-semibold">Modality:</span> <span className="font-bold text-gray-800">Ultrasound</span></div>
+                        <div><span className="text-gray-500 font-semibold">AI Engine:</span> <span className="font-bold text-gray-800">{a.modelUsed || 'OncoScanAI Best Model'}</span></div>
+                        <div><span className="text-gray-500 font-semibold">Result:</span> <span className="font-black" style={{ color: diagBadgeBg }}>{a.pathology.toUpperCase()}</span></div>
+                      </div>
+                    </div>
+
+                    {/* ══ REPORT TITLE ══ */}
+                    <div className="text-center py-4 border-b border-gray-200 bg-white">
+                      <h2 className="text-[1.3rem] font-black tracking-widest uppercase" style={{ color: '#1e3a5f' }}>Ultrasound Analysis Report</h2>
+                      <p className="text-[10.5px] text-gray-400 mt-0.5 tracking-wide">AI-Assisted Lesion Detection & Segmentation · OncoScanAI Diagnostic Platform</p>
+                    </div>
+
+                    <div className="px-6 pt-5 pb-6 space-y-6">
+
+                      {/* ══ DIAGNOSIS + CONFIDENCE ══ */}
+                      <div className="flex items-center gap-5 p-4 rounded-xl border-2" style={{ borderColor: diagBadgeBg, backgroundColor: `${diagBadgeBg}08` }}>
+                        <div className="flex-shrink-0 flex flex-col items-center">
+                          <div className="px-6 py-3 rounded-lg text-white font-black text-[15px] uppercase tracking-widest shadow-md" style={{ backgroundColor: diagBadgeBg }}>
+                            {a.pathology}
+                          </div>
+                          <p className="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">AI Diagnosis</p>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[12px] font-bold text-gray-700 uppercase tracking-wide">AI Confidence Level</span>
+                            <span className="text-[13px] font-black" style={{ color: confBarColor }}>{confPct.toFixed(1)}% — {confLabel}</span>
+                          </div>
+                          <div className="h-4 w-64 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                            <div className="h-full rounded-full transition-all duration-1000 ease-out shadow-sm"
                               style={{ width: `${confPct}%`, backgroundColor: confBarColor }} />
                           </div>
+                          <div className="flex justify-between mt-1 text-[9px] text-gray-400">
+                            <span>0%</span><span>Low</span><span>Moderate</span><span>High</span><span>100%</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* ── SCAN IMAGE IN REPORT ── */}
+                      {/* ══ SCAN IMAGES — FULL DISPLAY ══ */}
                       {selectedFile.previewUrl && (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex flex-col items-center">
-                            <div className="w-full h-36 bg-gray-900 border border-gray-400 overflow-hidden">
-                              <img src={selectedFile.previewUrl} alt="Original Scan" className="w-full h-full object-cover" />
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-widest mb-3" style={{ color: '#1e3a5f' }}>Scan Images</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Original — full image, no crop */}
+                            <div className="flex flex-col">
+                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '200px' }}>
+                                <img
+                                  src={selectedFile.previewUrl}
+                                  alt="Original Ultrasound Scan"
+                                  className="w-full h-full object-contain"
+                                  style={{ maxHeight: '260px' }}
+                                />
+                              </div>
+                              <div className="mt-2 text-center">
+                                <p className="text-[11px] font-bold text-gray-700">Original Ultrasound Scan</p>
+                                <p className="text-[10px] text-gray-400">As submitted for analysis</p>
+                              </div>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-1">Original Ultrasound Scan</p>
-                          </div>
-                          <div className="flex flex-col items-center">
-                            <div className="w-full h-36 bg-gray-900 border border-gray-400 overflow-hidden relative">
-                              <img src={selectedFile.previewUrl} alt="Segmentation" className="w-full h-full object-cover" style={{ filter: 'contrast(1.2) saturate(1.1)' }} />
-                              {a.segmentationMask && (
-                                <img src={a.segmentationMask} alt="Overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
-                              )}
+                            {/* Segmentation overlay — full image */}
+                            <div className="flex flex-col">
+                              <div className="bg-gray-900 border-2 border-gray-300 rounded-lg overflow-hidden flex items-center justify-center relative" style={{ minHeight: '200px' }}>
+                                <img
+                                  src={selectedFile.previewUrl}
+                                  alt="AI Segmentation"
+                                  className="w-full h-full object-contain"
+                                  style={{ maxHeight: '260px', filter: 'contrast(1.15) brightness(0.95)' }}
+                                />
+                                {a.segmentationMask && (
+                                  <img src={a.segmentationMask} alt="Mask Overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ mixBlendMode: 'screen' }} />
+                                )}
+                                {/* AI annotation badge */}
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded px-2 py-0.5">
+                                  <span className="text-[9px] font-black text-white uppercase tracking-widest">AI Segmentation</span>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-center">
+                                <p className="text-[11px] font-bold text-gray-700">Segmentation Overlay</p>
+                                <p className="text-[10px] text-gray-400">AI-detected region of interest</p>
+                              </div>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-1">Segmentation Overlay</p>
                           </div>
                         </div>
                       )}
 
-                      {/* ── FINDINGS ── */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-black uppercase text-[11.5px] tracking-widest" style={{ color: accentColor }}>Findings:</p>
+                      {/* ══ QUANTITATIVE METRICS ══ */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: 'AI Confidence', value: `${confPct.toFixed(1)}%`, icon: '🎯', color: confBarColor },
+                          { label: 'Lesion Area',   value: a.area   != null ? `${a.area.toFixed(2)} mm²`  : 'N/A', icon: '📐', color: '#1e3a5f' },
+                          { label: 'Lesion Pixels', value: a.pixels != null ? `${a.pixels} px`            : 'N/A', icon: '🔬', color: '#1e3a5f' },
+                        ].map(c => (
+                          <div key={c.label} className="rounded-xl border border-gray-200 p-4 bg-gradient-to-br from-slate-50 to-white shadow-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-base">{c.icon}</span>
+                              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{c.label}</p>
+                            </div>
+                            <p className="text-[1.3rem] font-black mt-1" style={{ color: c.color }}>{c.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ══ KEY FINDINGS ══ */}
+                      <div className="rounded-xl border-l-4 border-[#1e3a5f] bg-blue-50/50 p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <p className="font-black uppercase text-[12px] tracking-widest text-[#1e3a5f]">Key Findings</p>
                           {selectedFile.reportStatus === 'Generating' && (
-                            <span className="flex items-center gap-1 text-[10px] text-brand-pink font-bold animate-pulse">
+                            <span className="flex items-center gap-1 text-[10px] text-brand-pink font-bold animate-pulse ml-2">
                               <span className="w-2 h-2 rounded-full bg-brand-pink inline-block animate-ping" />
                               Enhancing with AI…
                             </span>
                           )}
                         </div>
-                        <p className="text-[12px] leading-6 text-gray-800">{findings}</p>
+                        <ul className="space-y-2">
+                          {keyFindings.map((point, i) => (
+                            <li key={i} className="flex items-start gap-3">
+                              <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black mt-0.5" style={{ backgroundColor: '#1e3a5f' }}>{i + 1}</span>
+                              <span className="text-[12.5px] leading-6 text-gray-800" dangerouslySetInnerHTML={{ __html: point }} />
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
-                      {/* ── QUANTITATIVE ── */}
-                      <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { label: 'AI Confidence',  value: `${confPct.toFixed(1)}%` },
-                          { label: 'Lesion Area',     value: a.area   != null ? `${a.area.toFixed(2)} mm²`  : 'N/A' },
-                          { label: 'Lesion Pixels',   value: a.pixels != null ? `${a.pixels} px`            : 'N/A' },
-                        ].map(c => (
-                          <div key={c.label} className="border border-gray-200 rounded p-3 bg-gray-50">
-                            <p className="text-[10px] text-gray-500 font-semibold uppercase">{c.label}</p>
-                            <p className="text-base font-black text-gray-800 mt-0.5">{c.value}</p>
-                          </div>
-                        ))}
+                      {/* ══ IMPRESSION ══ */}
+                      <div className="rounded-xl border border-gray-200 p-5 bg-white shadow-sm">
+                        <p className="font-black uppercase text-[12px] tracking-widest mb-2" style={{ color: '#1e3a5f' }}>Radiologist Impression</p>
+                        <p className="text-[13px] leading-7 text-gray-800 font-medium">{impression}</p>
                       </div>
 
-                      {/* ── IMPRESSION ── */}
-                      <div>
-                        <p className="font-black uppercase text-[11.5px] tracking-widest mb-1" style={{ color: accentColor }}>Impression:</p>
-                        <p className="text-[12px] leading-6 text-gray-800">{impression}</p>
+                      {/* ══ RECOMMENDATIONS ══ */}
+                      <div className="rounded-xl p-5" style={{ background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 100%)', border: '1px solid #c7d7ff' }}>
+                        <p className="font-black uppercase text-[12px] tracking-widest mb-3 text-[#1e3a5f]">Recommended Clinical Actions</p>
+                        <ul className="space-y-2">
+                          {recommendations.map((rec, i) => (
+                            <li key={i} className="flex items-start gap-3">
+                              <span className="text-[#1e3a5f] font-black text-sm flex-shrink-0">→</span>
+                              <span className="text-[12.5px] leading-6 text-gray-800">{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
-                      {/* ── SIGNATURE BLOCK ── */}
-                      <div className="border-t border-gray-200 pt-4 grid grid-cols-2 gap-6">
+                      {/* ══ SIGNATURE BLOCK ══ */}
+                      <div className="border-t-2 border-gray-200 pt-5 grid grid-cols-2 gap-8">
                         <div>
-                          <div className="h-8 border-b border-gray-400 mb-1 flex items-end">
-                            <span className="text-[11px] italic text-gray-400">AI-generated — pending pathologist review</span>
+                          <p className="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-3">Prepared By</p>
+                          <div className="h-10 border-b-2 border-gray-300 mb-2 flex items-end pb-1">
+                            <span className="text-[11px] italic text-gray-400">AI-generated · pending clinical review</span>
                           </div>
-                          <p className="text-[11px] font-bold text-gray-700">Dr. AI Radiologist (OncoScanAI)</p>
-                          <p className="text-[10px] text-gray-500">MBBS, FCPS Radiology</p>
-                          <p className="text-[10px] text-gray-500">OncoScanAI Imaging Center</p>
+                          <p className="text-[12px] font-black text-gray-800">Dr. AI Radiologist</p>
+                          <p className="text-[10.5px] text-gray-500">MBBS, FCPS Radiology</p>
+                          <p className="text-[10.5px] text-gray-500">OncoScanAI Imaging Center</p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[11px] font-bold text-gray-700">Verified By</p>
-                          <div className="h-8 border-b border-gray-400 mb-1" />
-                          <p className="text-[10px] text-gray-500">Authorized Radiologist Signature</p>
-                          <p className="text-[10px] text-gray-500">Stamp &amp; Date Required</p>
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-3">Verified & Authorized By</p>
+                          <div className="h-10 border-b-2 border-gray-300 mb-2" />
+                          <p className="text-[12px] font-black text-gray-800">Authorized Radiologist</p>
+                          <p className="text-[10.5px] text-gray-500">Signature, Stamp & Date Required</p>
+                          <p className="text-[10.5px] text-gray-500">Before Clinical Use</p>
                         </div>
                       </div>
                     </div>
 
-                    {/* ── FOOTER ── */}
-                    <div style={{ backgroundColor: accentColor }} className="px-6 py-2 flex items-center justify-between">
-                      <p className="text-blue-200 text-[10px] italic">This report is AI-generated for preliminary reference only. A licensed radiologist must review before clinical use.</p>
-                      <p className="text-white text-[10px] font-mono">{reportId} · OncoScanAI v2</p>
+                    {/* ══ FOOTER ══ */}
+                    <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)' }} className="px-6 py-3 flex items-center justify-between">
+                      <p className="text-blue-200 text-[10px] italic max-w-md">This report is AI-generated for preliminary reference only. A licensed radiologist must review, interpret and validate findings before any clinical decision is made.</p>
+                      <p className="text-white text-[10px] font-mono font-bold flex-shrink-0 ml-4">{reportId} · OncoScanAI v2</p>
                     </div>
                   </div>
                 );
