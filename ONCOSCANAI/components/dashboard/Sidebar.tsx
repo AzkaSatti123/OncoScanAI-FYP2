@@ -2,17 +2,27 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { DashboardIcon, PatientDataIcon, VisionIcon, SettingsIcon } from '../icons';
 
-// Add UltrasoundIcon if needed, or reuse VisionIcon
 const UltrasoundIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>
   </svg>
 );
 
+const MultiClassIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7" cy="7" r="3" />
+    <circle cx="17" cy="7" r="3" />
+    <circle cx="12" cy="17" r="3" />
+    <line x1="7" y1="10" x2="12" y2="14" />
+    <line x1="17" y1="10" x2="12" y2="14" />
+  </svg>
+);
+
 const navItems = [
   { path: '/dashboard', label: 'Overview', icon: DashboardIcon, exact: true },
   { path: '/dashboard/patient-data', label: 'Patient Records', icon: PatientDataIcon },
-  { path: '/dashboard/vision-workbench', label: 'Histo Analysis', icon: VisionIcon },
+  { path: '/dashboard/vision-workbench', label: 'Uni HistoAnalysis', icon: VisionIcon },
+  { path: '/dashboard/multi-class-histo', label: 'Multi-Class Histo', icon: MultiClassIcon },
   { path: '/dashboard/ultrasound-analysis', label: 'Ultrasound Analysis', icon: UltrasoundIcon },
   { path: '/dashboard/settings', label: 'System Settings', icon: SettingsIcon },
 ];

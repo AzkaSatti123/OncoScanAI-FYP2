@@ -380,6 +380,20 @@ const MultiClassHistoAnalysis: React.FC = () => {
   return (
     <div className="flex flex-col gap-5 h-full">
 
+      {/* ══ MODEL BADGE ══ */}
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-brand-pink/20 bg-pink-50/60 self-start">
+        <div className="w-8 h-8 rounded-lg bg-brand-pink flex items-center justify-center shadow-sm flex-shrink-0">
+          <ModelIcon className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <p className="text-[11px] font-black text-brand-pink uppercase tracking-widest leading-tight">Active Model</p>
+          <p className="text-[13px] font-black text-slate-900 leading-tight">OncoScanAI Master Model</p>
+        </div>
+        <span className="ml-2 flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">
+          <LiveIcon className="w-3 h-3" /> Live
+        </span>
+      </div>
+
       {/* ══ TOP: Upload + queue ══ */}
       <div className="relative rounded-2xl shadow-subtle border border-gray-200 overflow-hidden">
         <div className="absolute inset-0 dot-grid-bg opacity-40 pointer-events-none" />

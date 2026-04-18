@@ -11,7 +11,8 @@ const Header: React.FC = () => {
         if (path === '') return 'Dashboard';
 
         const overrides: Record<string, string> = {
-            'vision-workbench': 'HistoAnalysis',
+            'vision-workbench': 'Uni HistoAnalysis',
+            'multi-class-histo': 'Multi-Class HistoAnalysis',
         };
 
         if (overrides[path]) return overrides[path];
