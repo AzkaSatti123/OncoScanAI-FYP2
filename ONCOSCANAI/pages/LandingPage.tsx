@@ -15,9 +15,10 @@ const LandingPage: React.FC = () => {
             <span className="text-2xl font-bold tracking-tight">OncoDetect <span className="text-brand-pink font-light">Pro</span></span>
           </div>
           <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-brand-text-secondary">
-            <Link to="/dashboard" className="px-5 py-2.5 bg-brand-text-primary text-white rounded-full hover:bg-black transition-all shadow-sm">
-              SignUp/Login
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link to="/login"  className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-brand-pink transition-colors">Log In</Link>
+              <Link to="/signup" className="px-5 py-2.5 bg-brand-pink text-white rounded-full hover:bg-brand-pink-dark transition-all shadow-sm text-sm font-bold">Sign Up</Link>
+            </div>
           </div>
         </div>
       </nav>

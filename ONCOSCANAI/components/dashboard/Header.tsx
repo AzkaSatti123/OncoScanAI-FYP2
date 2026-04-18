@@ -1,10 +1,20 @@
 
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 import { SearchIcon, BellIcon } from '../icons';
 
 const Header: React.FC = () => {
     const location = useLocation();
+    const navigate  = useNavigate();
+    const { user }  = useAuth();
+
+    const handleSignOut = async () => {
+        await signOut(auth);
+        navigate('/login');
+    };
     
     const getTitle = () => {
         const path = location.pathname.replace('/dashboard', '').replace(/^\/+/, '');
@@ -40,13 +50,27 @@ const Header: React.FC = () => {
                     </span>
                 </button>
                 <div className="w-px h-8 bg-gray-200"></div>
-                <div className="flex items-center space-x-3 cursor-pointer group">
-                    <img src="https://picsum.photos/seed/doctor/40/40" alt="Doctor" className="w-10 h-10 rounded-full" />
+                <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm shadow"
+                        style={{ background: 'linear-gradient(135deg,#ec4899,#a855f7)' }}>
+                        {user?.displayName ? user.displayName.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                    </div>
                     <div>
-                        <p className="font-semibold text-sm text-brand-text-primary group-hover:text-brand-pink transition-colors">Doctor</p>
+                        <p className="font-semibold text-sm text-brand-text-primary leading-tight">
+                            {user?.displayName ?? user?.email ?? 'User'}
+                        </p>
                         <p className="text-xs text-brand-text-secondary">Oncologist</p>
                     </div>
                 </div>
+                <button
+                    onClick={handleSignOut}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-brand-pink hover:bg-pink-50 transition-all border border-slate-200"
+                    title="Sign out">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign Out
+                </button>
             </div>
         </header>
     );
