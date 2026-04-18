@@ -96,7 +96,7 @@ const LandingPage: React.FC = () => {
                 {
                   title: 'MultiClass HistoAnalysis',
                   description: 'Advanced multi-class tissue classification.',
-                  to: '/dashboard/vision-workbench',
+                  to: '/dashboard/multi-class-histo',
                   icon: (
                     <svg className="w-6 h-6 text-brand-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <circle cx="7" cy="7" r="3" strokeWidth="2" />
