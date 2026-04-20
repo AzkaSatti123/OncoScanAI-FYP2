@@ -1,0 +1,23 @@
+% Standalone compile: pdflatex chapter3-standalone.tex (run twice for refs)
+\documentclass[12pt,a4paper]{report}
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{parskip}
+
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single}
+
+\begin{document}
+
+\tableofcontents
+\newpage
+
+\input{chapter3-system-overview.tex}
+
+\end{document}

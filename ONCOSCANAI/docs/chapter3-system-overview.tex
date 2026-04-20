@@ -1,0 +1,525 @@
+% =============================================================================
+% Chapter 3 — System Overview (OncoScanAI / OncoDetect Pro)
+% Usage: \input{chapter3-system-overview} from main thesis, or compile standalone
+%        by uncommenting \documentclass and \begin{document} / \end{document}
+% =============================================================================
+% \documentclass[12pt,a4paper]{report}
+% \usepackage[margin=1in]{geometry}
+% \usepackage[utf8]{inputenc}
+% \usepackage[T1]{fontenc}
+% \usepackage{booktabs}
+% \usepackage{longtable}
+% \usepackage{hyperref}
+% \usepackage{xcolor}
+% \usepackage{listings}
+% \usepackage{caption}
+% \usepackage{graphicx}
+% \usepackage{parskip}
+% \lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single}
+% \begin{document}
+
+\chapter{System Overview}
+\label{ch:system-overview}
+
+\section{Introduction: Functionality, Context, and Design}
+
+\textbf{OncoScanAI} (also branded as \textbf{OncoDetect Pro} in project metadata) is a web-based decision-support system aimed at oncology and pathology workflows. It assists clinicians by running \textbf{deep learning models} on medical images---primarily \textbf{breast histopathology} (single- and multi-class) and \textbf{breast ultrasound} (classification and/or segmentation)---and presenting \textbf{confidence scores}, \textbf{model explanations}, and \textbf{draft narrative reports}. The system is \textbf{assistive}: outputs are framed as preliminary and require professional review, consistent with in-app disclaimers.
+
+\paragraph{Context.}
+The application targets a clinical-adjacent environment where a user signs in, uploads images through a browser, and receives AI-derived findings without requiring a desktop pathology suite. The stack separates \textbf{user interface and identity} (browser + Firebase Authentication) from \textbf{compute-heavy inference} (local FastAPI service with PyTorch/Keras/Ultralytics engines) and \textbf{optional text generation} for structured reports (Cloudflare Worker, proxied in development).
+
+\paragraph{Design stance.}
+The project is decomposed into \textbf{presentation}, \textbf{application/API}, \textbf{AI inference}, and \textbf{auxiliary services} (report worker, PDF via browser print). This keeps the UI thin, centralizes model loading and versioning on the server, and allows the report narrative to evolve independently of the core classifier.
+
+\paragraph{Background.}
+Technical PDFs supporting modeling and evaluation (e.g.\ YOLOv8 training comparisons, multiclass and binary histopathology model documentation) correspond to the \textbf{trained artifacts} consumed by the FastAPI \texttt{engines} and exposed through \texttt{/predict/*} routes.
+
+% -----------------------------------------------------------------------------
+\section{Architectural Design}
+\label{sec:arch}
+
+\subsection{Why the system was decomposed}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Decomposition rationale}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.28\textwidth}p{0.42\textwidth}@{}}
+    \toprule
+    \textbf{Concern} & \textbf{Module} & \textbf{Rationale} \\
+    \midrule
+    User experience \& routing & React SPA & Fast iteration, component reuse, client-side state for uploads \\
+    Identity & Firebase Auth & Managed passwords/sessions without a custom auth backend \\
+    Inference \& GPU/CPU load & FastAPI backend & Long-running model load, unified inference API, file uploads \\
+    Narrative reports & Cloudflare Worker (\texttt{/report}) & Offloads LLM-style report drafting from the Python process \\
+    Developer workflow & Vite dev server + proxy & Single origin for \texttt{/predict}, \texttt{/models}, \texttt{/report} during development \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The system follows a \textbf{multi-tier, client--server} pattern: the browser is the \textbf{client}; \textbf{Firebase} provides \textbf{identity}; the \textbf{FastAPI} service is the \textbf{application + AI tier}; the \textbf{worker} is an \textbf{edge/auxiliary tier} for report text.
+
+\subsection{Modular structure and collaboration}
+
+\begin{itemize}
+  \item \textbf{\texttt{App.tsx} / routing:} Public routes (landing, login, signup) vs.\ \textbf{protected} dashboard routes; \texttt{AuthContext} gates access.
+  \item \textbf{\texttt{pages/*}:} Feature screens (e.g.\ \texttt{VisionWorkbench}, \texttt{UploadScans}, \texttt{MultiClassHistoAnalysis}) orchestrate API calls and UI state.
+  \item \textbf{\texttt{components/*}:} Reusable UI (icons, layout pieces, dashboards).
+  \item \textbf{\texttt{context/AuthContext.tsx}:} Subscribes to Firebase \texttt{onAuthStateChanged}.
+  \item \textbf{\texttt{types.ts}:} Shared TypeScript contracts for uploads, predictions, and reports.
+  \item \textbf{\texttt{backend/main.py}:} FastAPI app; loads models from disk; \texttt{/predict/histo/\{model\_name\}}, \texttt{/predict/ultrasound/*}, \texttt{/models}.
+  \item \textbf{\texttt{backend/cf-report-worker}:} Worker that builds prompts and returns structured narrative sections (development proxy in \texttt{vite.config.ts}).
+\end{itemize}
+
+Data for analyses and queues lives \textbf{in React state} for the current session; \textbf{Firebase} is used for \textbf{authentication}, not for persisting patient records in the current codebase (Patient Data / Reports pages are \textbf{placeholders} for future persistence).
+
+\subsection{Initial design: box-and-line diagram}
+
+Figure~\ref{fig:box-line} shows high-level connectivity. Export the listing to PDF/PNG from \url{https://mermaid.live} if vector/raster figures are required.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart LR
+  subgraph Client["Web browser (React SPA)"]
+    UI[Pages and components]
+  end
+  FB[Firebase Auth]
+  API[FastAPI inference service]
+  WR[Report worker]
+  FS[Model files on disk]
+
+  UI --> FB
+  UI --> API
+  UI --> WR
+  API --> FS
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Mermaid source: box-and-line diagram (export to PDF/PNG from \url{https://mermaid.live})}
+  \label{fig:box-line}
+\end{figure}
+
+\subsection{Architecture pattern}
+
+\begin{itemize}
+  \item \textbf{Overall:} \textbf{Multi-tier client--server} (presentation $\rightarrow$ API $\rightarrow$ models).
+  \item \textbf{Front end:} \textbf{Component-based UI} with \textbf{MVC-like separation}: \emph{Model} $\approx$ \texttt{types} + component state; \emph{View} $\approx$ JSX pages/components; \emph{Controller} $\approx$ event handlers and \texttt{fetch} to backend/worker.
+  \item \textbf{Back end:} \textbf{Service-oriented} API (REST-style endpoints over HTTP).
+\end{itemize}
+
+\subsection{Mapping modules to architecture tiers}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Module-to-tier mapping}
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.32\textwidth}p{0.44\textwidth}@{}}
+    \toprule
+    \textbf{Tier} & \textbf{Architectural role} & \textbf{Project mapping} \\
+    \midrule
+    Presentation & UI, navigation, session UX & \texttt{pages/}, \texttt{components/}, \texttt{App.tsx}, \texttt{index.css} \\
+    Client application logic & Upload queue, analysis orchestration, PDF trigger & \texttt{VisionWorkbench.tsx}, \texttt{UploadScans.tsx}, \texttt{MultiClassHistoAnalysis.tsx}, \texttt{utils/downloadPDF.ts} \\
+    Cross-cutting & Identity & \texttt{firebase.ts}, \texttt{context/AuthContext.tsx} \\
+    Application / API & Inference, model lifecycle & \texttt{backend/main.py} (\texttt{FastAPI}, \texttt{engines}, routes) \\
+    Data / model storage & Persisted weights, config & \texttt{backend/models/*.pth}, \texttt{*.h5}, \texttt{.modelstate}, \texttt{.modelconfig} \\
+    Auxiliary service & Report narrative generation & \texttt{backend/cf-report-worker/src/index.ts} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Subsystem diagram}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart TB
+  subgraph Browser
+    R[React SPA]
+    AC[AuthContext]
+  end
+  subgraph Google
+    FA[Firebase Auth]
+  end
+  subgraph LocalOrServer["Host running FastAPI"]
+    F[FastAPI]
+    M[Model engines PyTorch Keras YOLO]
+  end
+  subgraph Edge["Cloudflare Worker optional"]
+    W[Report generator]
+  end
+
+  R --> AC
+  AC --> FA
+  R -->|"HTTP /predict /models"| F
+  R -->|"HTTP /report"| W
+  F --> M
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Major subsystems and connections}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Data Design}
+\label{sec:data}
+
+\subsection{Information domain to structures}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Domain concepts and implementation}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.38\textwidth}p{0.32\textwidth}@{}}
+    \toprule
+    \textbf{Concept} & \textbf{Implementation} & \textbf{Persistence} \\
+    \midrule
+    User identity & Firebase \texttt{User} (email, uid, displayName) & Firebase (cloud) \\
+    Uploaded file row & \texttt{UploadedFile} & Browser memory (session) \\
+    Classification output & \texttt{AnalysisResult}, \texttt{HistoPrediction} & After API response; held on \texttt{UploadedFile} \\
+    Narrative report & \texttt{StructuredReport}, \texttt{ReportSection} & Optional enrichment from worker; on \texttt{UploadedFile} \\
+    Model availability & JSON from \texttt{GET /models} & Derived from loaded \texttt{engines} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+There is \textbf{no relational database} in the current implementation for patients or studies; Section~\ref{sec:erd} and Section~\ref{sec:dfd} include \textbf{logical} entities for a \textbf{future} persistence layer.
+
+\subsection{Databases and storage items (as implemented)}
+
+\begin{enumerate}
+  \item \textbf{Firebase Authentication} --- user accounts and session tokens (not Firestore in code today).
+  \item \textbf{File system (\texttt{backend/models/})} --- neural network weights (e.g.\ \texttt{.pth}, \texttt{.h5}).
+  \item \textbf{Local state files} --- e.g.\ \texttt{.modelstate} / \texttt{.modelconfig} (backend) for which engines were loaded.
+  \item \textbf{Browser memory} --- upload queue and analysis results until refresh.
+\end{enumerate}
+
+\subsection{Entity--Relationship Diagram (ERD)}
+\label{sec:erd}
+
+\textbf{Chen-style summary (for hand drawing in draw.io):}
+\textit{Entities:} User, AnalysisSession, ImageStudy, ModelRun, Report.
+\textit{Relationships:} User submits AnalysisSession (1:N); AnalysisSession contains ImageStudy (1:N); ImageStudy produces ModelRun (1:N); ModelRun optionally generates Report (1:0..1).
+\textit{Attributes:} e.g.\ User(uid, email); ImageStudy(fileName, modality, uploadedAt); ModelRun(pathology, confidence, modelName); Report(sectionsJson, createdAt).
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+erDiagram
+  USER ||--o{ ANALYSIS_SESSION : "owns"
+  ANALYSIS_SESSION ||--o{ IMAGE_STUDY : "contains"
+  IMAGE_STUDY ||--o{ MODEL_RUN : "produces"
+  MODEL_RUN ||--o| REPORT : "may_generate"
+
+  USER {
+    string uid PK
+    string email
+  }
+  ANALYSIS_SESSION {
+    string id PK
+    string userId FK
+    datetime startedAt
+  }
+  IMAGE_STUDY {
+    string id PK
+    string sessionId FK
+    string fileName
+    string modality
+  }
+  MODEL_RUN {
+    string id PK
+    string studyId FK
+    string modelName
+    string pathology
+    float confidence
+  }
+  REPORT {
+    string id PK
+    string modelRunId FK
+    text sectionsJson
+  }
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Logical ERD (crow's-foot notation via Mermaid)}
+\end{figure}
+
+\subsection{Data Flow Diagram (DFD)}
+\label{sec:dfd}
+
+\paragraph{Context (Level 0).}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart LR
+  Clinician([Clinician / User])
+  P[OncoScanAI System]
+  FB[(Firebase Auth)]
+  API[(Inference API)]
+  MW[(Report Worker)]
+
+  Clinician -->|credentials| FB
+  Clinician -->|images requests| P
+  P -->|auth verify| FB
+  P -->|images| API
+  P -->|analysis summary| MW
+  P -->|results reports| Clinician
+  \end{lstlisting}
+  \end{minipage}
+  \caption{DFD Level 0 (context)}
+\end{figure}
+
+\paragraph{Level 1.}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart TB
+  E[User]
+  P1[1 Authenticate]
+  P2[2 Upload and queue images]
+  P3[3 Run inference]
+  P4[4 Generate narrative report]
+  P5[5 Present results and export PDF]
+  D1[(Session state in browser)]
+  D2[(Model files)]
+  D3[(Auth service)]
+
+  E --> P1
+  P1 <--> D3
+  P2 --> D1
+  P2 --> P3
+  P3 --> D2
+  P3 --> D1
+  D1 --> P4
+  P4 --> D1
+  D1 --> P5
+  P5 --> E
+  \end{lstlisting}
+  \end{minipage}
+  \caption{DFD Level 1}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Domain Model}
+\label{sec:domain}
+
+\subsection{Entities and relationships (conceptual)}
+
+\begin{itemize}
+  \item \textbf{User:} Authenticated clinician using the system.
+  \item \textbf{Imaging study / upload:} A file (histology or ultrasound) introduced for analysis.
+  \item \textbf{Model run:} One invocation of a named engine with quantitative outputs.
+  \item \textbf{Pathology outcome:} High-level class (e.g.\ benign / malignant / normal / inconclusive) plus confidence.
+  \item \textbf{Report:} Human-readable sections (summary, impression, limitations, disclaimer) suitable for review.
+\end{itemize}
+
+\textbf{Associations:} A \textbf{User} triggers \textbf{sessions}; each \textbf{upload} yields \textbf{model output}; \textbf{reports} interpret that output for documentation.
+
+\subsection{Bridge to requirements}
+
+The domain model connects ``upload image $\rightarrow$ get AI scores $\rightarrow$ document in report form'' to the screens (\texttt{VisionWorkbench}, \texttt{UploadScans}, \texttt{MultiClassHistoAnalysis}) and to the APIs (\texttt{/predict/*}, \texttt{/report}).
+
+\subsection{Class diagram (TypeScript-centric)}
+\label{sec:class-domain}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+classDiagram
+  class UploadedFile {
+    +string id
+    +string name
+    +string status
+    +AnalysisResult analysis
+    +HistoPrediction prediction
+    +StructuredReport structuredReport
+    +string reportStatus
+  }
+  class AnalysisResult {
+    +pathology
+    +number confidence
+    +string insight
+    +string modelUsed
+    +string segmentationMask
+  }
+  class HistoPrediction {
+    +string result
+    +number confidence
+    +string diagnosis
+    +number pathology_confidence
+  }
+  class StructuredReport {
+    +ReportSection[] sections
+  }
+  class ReportSection {
+    +string title
+    +subsections
+  }
+  UploadedFile "1" --> "0..1" AnalysisResult : analysis
+  UploadedFile "1" --> "0..1" HistoPrediction : prediction
+  UploadedFile "1" --> "0..1" StructuredReport : structuredReport
+  StructuredReport "1" --> "*" ReportSection
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Domain-oriented class diagram (implementation view)}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Behavioral and Structural Design Models}
+\label{sec:behavioral}
+
+\subsection{Activity diagram: histology analysis}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart TD
+  A[User selects model] --> B[User drops files]
+  B --> C[Create UploadedFile entries Pending]
+  C --> D[POST predict/histo/model]
+  D --> E{Success?}
+  E -->|yes| F[Map response to AnalysisResult]
+  F --> G[Set status Complete]
+  G --> H[Request report worker optional]
+  H --> I[Render results and report]
+  E -->|no| J[Set status Failed]
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Activity diagram: histology pipeline}
+\end{figure}
+
+\subsection{Class-level sequence diagram}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+sequenceDiagram
+  participant U as User
+  participant VW as VisionWorkbench
+  participant API as FastAPI
+  participant E as Model engine
+  participant W as Report worker
+
+  U->>VW: Upload image
+  VW->>API: POST /predict/histo/modelName
+  API->>E: forward tensor or image
+  E-->>API: logits or mask data
+  API-->>VW: JSON prediction
+  VW->>W: POST /report with analysis summary
+  W-->>VW: structured sections optional
+  VW-->>U: Display results and report
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Sequence diagram: class-level interaction}
+\end{figure}
+
+\subsection{State diagram: UploadedFile.status}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+stateDiagram-v2
+  [*] --> Pending
+  Pending --> Analyzing : inference starts
+  Analyzing --> Complete : success
+  Analyzing --> Failed : error
+  Complete --> Analyzing : user retries
+  Failed --> Analyzing : user retries
+  \end{lstlisting}
+  \end{minipage}
+  \caption{State diagram for upload/analysis lifecycle}
+\end{figure}
+
+\subsection{Component diagram}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.92\textwidth}
+  \lstset{language={},basicstyle=\ttfamily\scriptsize}
+  \begin{lstlisting}
+flowchart LR
+  subgraph spa["oncospanai SPA"]
+    pages[pages]
+    comp[components]
+    ctx[AuthContext]
+  end
+  subgraph api["Python service"]
+    fastapi[FastAPI main]
+    utils[utils preprocess]
+  end
+  subgraph worker["cf-report-worker"]
+    gen[report generation]
+  end
+  pages --> fastapi
+  pages --> gen
+  ctx --> firebase[(Firebase)]
+  fastapi --> utils
+  fastapi --> models[(Model files)]
+  \end{lstlisting}
+  \end{minipage}
+  \caption{Component diagram}
+\end{figure}
+
+\subsection{System architecture figure}
+
+Use the subsystem diagram (Section~\ref{sec:arch}) as the deployment-style system architecture figure, with caption: \textit{Logical deployment: browser client, hosted auth, local inference host, optional edge worker.}
+
+% -----------------------------------------------------------------------------
+\section{Mockups}
+\label{sec:mockups}
+
+\paragraph{Purpose.}
+Mockups communicate \textbf{layout}, \textbf{workflow}, and \textbf{key interactions} before or alongside implementation (Figma, Adobe XD, or draw.io). The implementation already reflects many of these patterns.
+
+\paragraph{Screens (aligned with the running app).}
+
+\begin{enumerate}
+  \item \textbf{Landing (\texttt{LandingPage})} --- Hero headline (``AI-Powered Precision in Breast Cancer Diagnostics''), primary CTA to dashboard, secondary ``Explore Technology,'' brand gradient and imagery.
+  \item \textbf{Authentication (\texttt{Login} / \texttt{SignUp})} --- Email/password fields, link between sign-in and registration, redirect when already logged in.
+  \item \textbf{Dashboard shell} --- Top \textbf{header} with page title (e.g.\ Uni HistoAnalysis), search field, notifications, user avatar, sign-out.
+  \item \textbf{Uni HistoAnalysis / Vision Workbench} --- Top area: \textbf{active engine} (AlexNet, EfficientNet, YOLO, etc.), \textbf{drag-and-drop} upload, \textbf{clinical queue} with per-file status; bottom: \textbf{model results} (image, pathology badge, confidence bar, neural insight) and \textbf{surgical pathology report} with Regenerate / Download PDF.
+  \item \textbf{Ultrasound analysis (\texttt{UploadScans})} --- Similar upload/analyze/report pattern for \textbf{combined classification + segmentation} (badges, mask visualization when returned).
+  \item \textbf{Multi-class histology (\texttt{MultiClassHistoAnalysis})} --- Emphasis on \textbf{subclass} and \textbf{diagnosis group} with multi-class report layout.
+  \item \textbf{Patient Data / Reports (placeholders)} --- Dashed-border empty states and primary buttons (``Add New Patient,'' ``Generate First Report'') indicating \textbf{future} EMR-style and report-repository features.
+\end{enumerate}
+
+\paragraph{User interactions.}
+File picker and drag-drop; model selection chips; queue selection; asynchronous analysis with loading and failure retry; optional report regeneration; PDF via browser print (\texttt{downloadReportAsPDF}).
+
+\paragraph{Tools.}
+State \textbf{Figma} or \textbf{draw.io} for formal submission figures; for screenshots of the implemented UI, use the running Vite app (port \texttt{3002}) with backend on \texttt{8000} and worker on \texttt{8787} when testing the full pipeline.
+
+\subsection{Figure checklist}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Suggested figures per section}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    \textbf{Section} & \textbf{Suggested figure} \\
+    \midrule
+    \ref{sec:arch} & Box-and-line + subsystem / component \\
+    \ref{sec:erd} & ERD (Mermaid or Chen-style in draw.io) \\
+    \ref{sec:dfd} & DFD Level 0 + Level 1 \\
+    \ref{sec:class-domain} & Class diagram \\
+    \ref{sec:behavioral} & Activity, sequence, state, component (per rubric) \\
+    \ref{sec:mockups} & 2--4 UI mockups or screenshots \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% \end{document}

@@ -1,0 +1,116 @@
+================================================================================
+OncoScanAI — System overview & demo narration script
+================================================================================
+Use this for presentations, walkthrough videos, or stakeholder demos. Timings are
+approximate for a ~3–4 minute voiceover.
+
+--------------------------------------------------------------------------------
+1. HOW THE SYSTEM WORKS (technical, accurate to the codebase)
+--------------------------------------------------------------------------------
+
+FRONTEND (React + HashRouter)
+- Public: landing page, login, signup.
+- After Firebase sign-in, users access the dashboard under /dashboard/...
+- Protected routes: Vision Workbench, Multi-class Histo, Ultrasound Analysis,
+  Patient Data, Reports, Settings.
+
+AUTHENTICATION
+- Firebase Authentication gates the dashboard; unauthenticated users are sent
+  to /login.
+
+BACKEND API (FastAPI, default http://127.0.0.1:8000)
+- GET  /models — lists active engines (histology + ultrasound keys).
+- POST /predict/histo/{model_name} — image upload; runs the named neural engine
+  (e.g. master Keras model for multi-class histology, or other loaded models).
+- POST /predict/ultrasound/segment — segmentation-only (YOLO segmenter).
+- POST /predict/ultrasound/classify — classification-only.
+- POST /predict/ultrasound/combined — runs classifier + segmenter on the same
+  upload; merges classification (normal / benign / malignant) with mask stats,
+  heatmap/overlay data when available.
+
+MODEL PIPELINE (high level)
+- On startup, models load from backend/models (see .modelconfig / .modelstate).
+- Histology: TensorFlow/Keras paths preprocess images (e.g. master model) and
+  return class labels, confidence, and insights.
+- Ultrasound: Ultralytics (YOLO) engines for classification and segmentation;
+  combined endpoint stitches both outputs for the UI.
+
+REPORTS & NLP
+- Ultrasound: after inference, the UI can POST a JSON summary to a report
+  worker (proxied as /report) to enrich a narrative; if the worker is offline
+  or slow, a local fallback paragraph is shown immediately.
+- Histology (Vision Workbench / multi-class): similar pattern — inference first,
+  then optional NLP enrichment in the background.
+
+--------------------------------------------------------------------------------
+2. NARRATION SCRIPT — “Full product walkthrough” (~3–4 min)
+--------------------------------------------------------------------------------
+
+[SCENE 0 — OPENING — 0:00–0:25]
+“OncoScanAI is a web application that helps clinicians and researchers explore
+AI-assisted analysis of medical imaging. The site is built as a React app with
+secure sign-in. Behind the scenes, a Python FastAPI service loads trained
+models and runs inference when you upload an image.”
+
+[SCENE 1 — LANDING & AUTH — 0:25–0:45]
+“Visitors land on the public homepage. To use the analysis tools, they create
+an account or sign in. Authentication is handled by Firebase, so only verified
+users reach the dashboard.”
+
+[SCENE 2 — DASHBOARD & MODES — 0:45–1:20]
+“Once inside, the dashboard organizes several workflows. The Vision Workbench
+and histology flows focus on tissue slides: you pick a model, upload a slide,
+and the backend runs that model on your file. The ultrasound workflow lets you
+upload scans; the system asks the server which models are available, then runs
+a combined pipeline that both classifies the scan and produces segmentation
+for visualization.”
+
+[SCENE 3 — UPLOAD → API — 1:20–1:55]
+“When you drop a file, the browser sends it to the API as a multipart upload.
+The server does not ‘guess’ in the browser — the real neural networks run on
+the machine hosting the FastAPI service. For ultrasound, the combined endpoint
+runs a classifier and a segmenter in sequence on the same image and merges the
+results: classification labels and confidence, plus mask-based measurements
+where the model supports them.”
+
+[SCENE 4 — RESULTS IN THE UI — 1:55–2:35]
+“The UI maps the JSON response into a clear analysis view: predicted category,
+confidence, and explanatory text. For ultrasound, you may also see heatmaps
+or overlays and numeric details like area or pixel counts. A structured report
+can be generated or refreshed; if an optional report-generation service is
+configured, it enriches the narrative — otherwise the app still shows a sensible
+fallback summary so the user is never blocked.”
+
+[SCENE 5 — REPORTS & DATA — 2:35–3:05]
+“Beyond a single analysis, the product ties into patient-oriented views and
+stored reports so findings can be reviewed in context. Settings let users
+configure their experience. Everything is designed so that AI output is clearly
+labeled as assistive — a human specialist remains essential for clinical
+decisions.”
+
+[SCENE 6 — CLOSING — 3:05–3:30]
+“In short: Firebase secures access, the React app orchestrates uploads and
+display, and FastAPI plus local model weights perform the actual inference.
+That separation keeps the interface responsive while the heavy lifting stays on
+the inference server.”
+
+--------------------------------------------------------------------------------
+3. SHORT “ELEVATOR” VERSION (~30 seconds)
+--------------------------------------------------------------------------------
+
+“OncoScanAI is a React web app with Firebase login. Logged-in users upload
+histology or ultrasound images. The frontend sends files to a FastAPI backend
+that loads PyTorch/Keras/YOLO models from disk, runs classification and — for
+ultrasound — segmentation, then returns JSON the UI turns into charts, overlays,
+and reports. Optional services add richer text reports; the core diagnosis
+signals always come from the on-server models.”
+
+--------------------------------------------------------------------------------
+4. DEMO CHECKLIST (before recording)
+--------------------------------------------------------------------------------
+[ ] Backend running on port 8000 with models present under backend/models
+[ ] Frontend dev server running; GEMINI or report worker only if demoing NLP
+[ ] Test user account for Firebase
+[ ] Sample histology + ultrasound images (non-PHI) ready
+
+================================================================================
